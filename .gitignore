@@ -1,0 +1,22 @@
+# Dependencies & build output
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Environment & OS files
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Legacy / duplicate root files
+/My_Portfolio.html
+/Varun_Reddy_Resume.pdf
+
