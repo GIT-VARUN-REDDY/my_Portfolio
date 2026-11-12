@@ -1,37 +1,139 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Bot, User } from 'lucide-react';
-import { aiAvatarKnowledge } from '../data/portfolioData';
+import { personalInfo, projectsData } from '../data/portfolioData';
 
 const SUGGESTED_QUESTIONS = [
   "What's your tech stack?",
-  "Can I get your resume?",
-  "Tell me about your AI work",
+  "Tell me about your experience",
+  "Tell me about your projects",
   "Are you available for hire?"
 ];
 
 const INITIAL_MESSAGE = {
   id: 1,
   sender: 'bot',
-  text: "Hey there! I'm Varun's AI Assistant. Ask me anything about Varun's skills, experience, projects, or how to get in touch!"
+  text: "Hey there! I'm Varun's AI Assistant. Ask me anything about Varun's resume, experience, skills, projects, or how to get in touch!"
 };
 
-const findBestResponse = (query) => {
-  const q = query.toLowerCase();
+const RESUME_SECTIONS = [
+  {
+    key: 'experience',
+    keywords: ['experience', 'intern', 'internship', 'work history', 'ample', 'ey', 'gds', 'job', 'company', 'career', 'background'],
+    answer:
+      'Varun is currently a Technical Associate Intern at Ample Semiconductors (Sep 2026 – Present). Previously, he was a MERN Stack Developer Intern at EY Global Delivery Services (Dec 2024 – Jan 2025), where he built full-stack apps with React, Node.js, Express, and MongoDB.'
+  },
+  {
+    key: 'education',
+    keywords: ['education', 'degree', 'college', 'btech', 'b.tech', 'ece', 'graduat', 'cgpa', 'university', 'study', 'qualification'],
+    answer:
+      'Varun graduated with a B.Tech in Electronics and Communication Engineering (ECE) from Teegala Krishna Reddy Engineering College in April 2026 (CGPA: 8.0/10).'
+  },
+  {
+    key: 'certifications',
+    keywords: ['certif', 'credential', 'ibm', 'skillsbuild', 'aicte', 'course'],
+    answer:
+      'Varun holds the EY GDS AICTE MERN Stack Certification and IBM SkillsBuild Career Management Essentials certification.'
+  },
+  {
+    key: 'skills',
+    keywords: ['skill', 'stack', 'tech', 'language', 'frontend', 'backend', 'database', 'tool', 'mern', 'react', 'node', 'python', 'flutter', 'api', 'ai work', 'ai'],
+    answer:
+      'Technical skills from his resume: Languages (C, C++, Python, Java, JavaScript), Frontend (HTML, CSS, React.js, Bootstrap, Tailwind CSS), Backend & DBs (Node.js, Express.js, REST APIs, JWT, MongoDB, MySQL), AI (Prompt Engineering, ChatGPT, API Integration & Management), plus Flutter, Git/GitHub, Linux CLI, Vercel, and Render.'
+  },
+  {
+    key: 'projects',
+    keywords: ['project', 'projects', 'portfolio', 'built', 'app', 'apps', 'website', 'websites', 'work'],
+    answer:
+      'Varun has built 6 production projects: ElectroCirco (50+ hardware labs & firmware generator), SK Holidays & Events (travel & events platform), DreamLoom (MERN AI storybook PDF generator), DocMeet (healthcare booking & symptom triage), PPTxplains (voice-driven AI slide assistant), and spider-mind (Flutter + 3D web task tracker).'
+  },
+  {
+    key: 'contact',
+    keywords: ['hire', 'available', 'contact', 'email', 'mail', 'phone', 'call', 'reach', 'location', 'bengaluru', 'bangalore', 'github', 'linkedin', 'resume', 'cv', 'download'],
+    answer: `Varun is based in ${personalInfo.location} and open to full-time roles and projects. You can email him at ${personalInfo.email}, call ${personalInfo.phone}, check github.com/GIT-VARUN-REDDY, or download his resume directly from the top bar.`
+  },
+  {
+    key: 'about',
+    keywords: ['who', 'varun', 'about', 'bio', 'summary', 'introduce', 'yourself', 'him'],
+    answer:
+      'Varun Reddy Kandimalla is a MERN Stack Developer, Full-Stack Builder, and B.Tech ECE graduate (2026) based in Bengaluru. He builds scalable web apps, REST APIs, Flutter mobile apps, and AI-integrated products.'
+  }
+];
 
-  for (const item of aiAvatarKnowledge) {
-    if (item.keywords.some((kw) => q.includes(kw))) {
-      return item.answer;
+const GREETING_RE = /^(hi|hello|hey|hii+|hola|namaste|good\s*(morning|afternoon|evening)|how are you|thanks?|thank you|ty|ok|okay|cool|nice|great|bye|goodbye)[!.,?\s]*$/i;
+const FOLLOW_UP_RE = /^(any\s*more|tell\s*me\s*more|more(\s+info|\s+details|\s+about\s+(him|varun))?|anything\s*else|what\s*else|go\s*on|continue|next|and)[!.,?\s]*$/i;
+const OFF_TOPIC_RE = /\b(weather|forecast|temperature|news|recipe|cook|joke|poem|homework|solve|calculate|equation|capital\s+of|president|prime\s+minister|movie|song|lyrics|cricket|football|soccer|bitcoin|crypto|stock\s+price|translate)\b/i;
+
+const POLITE_REJECTION =
+  "Sorry, I can only answer questions about Varun Reddy's resume, experience, projects, skills, education, and how to contact him. Feel free to ask about any of those!";
+
+function findResumeFallback(query, history) {
+  const q = query.trim().toLowerCase();
+  if (!q) return POLITE_REJECTION;
+
+  if (OFF_TOPIC_RE.test(q) && !q.includes('varun')) {
+    return POLITE_REJECTION;
+  }
+
+  if (GREETING_RE.test(q)) {
+    if (/thank|ty/i.test(q)) {
+      return "You're welcome! Let me know if you'd like to hear more about Varun's projects, experience, or how to reach him.";
+    }
+    if (/bye|goodbye/i.test(q)) {
+      return 'Thanks for visiting Varun’s portfolio! Feel free to reach out anytime at varunreddy0429@gmail.com.';
+    }
+    return "Hi! Ask me anything about Varun's resume — his experience at Ample Semiconductors and EY GDS, his 6 projects, technical skills, education, or contact info.";
+  }
+
+  // Direct match for any of the 6 projects by name
+  const matchedProject = projectsData.find(
+    (p) => q.includes(p.title.toLowerCase()) || q.includes(p.id.toLowerCase())
+  );
+  if (matchedProject) {
+    const linkPart = matchedProject.demo
+      ? ` Live at ${matchedProject.demo}.`
+      : matchedProject.github
+        ? ` Code on ${matchedProject.github}.`
+        : '';
+    return `${matchedProject.title} (${matchedProject.category}): ${matchedProject.description}${linkPart}`;
+  }
+
+  // Match resume sections
+  for (const section of RESUME_SECTIONS) {
+    if (section.keywords.some((kw) => q.includes(kw))) {
+      return section.answer;
     }
   }
 
-  return "I'm Varun's AI avatar! Varun is a Full-Stack & AI Engineer specializing in React, Node.js, Python, and API integration. Feel free to download his resume or email him directly at varunreddy0429@gmail.com!";
-};
+  // Handle follow-up queries like "any more" / "what else" by sharing the next uncovered resume section
+  if (FOLLOW_UP_RE.test(q)) {
+    const priorBotText = history
+      .filter((m) => m.sender === 'bot')
+      .map((m) => m.text.toLowerCase())
+      .join(' ');
+
+    const unseen = RESUME_SECTIONS.find((sec) => {
+      if (sec.key === 'experience') return !priorBotText.includes('ample semiconductors');
+      if (sec.key === 'projects') return !priorBotText.includes('electrocirco');
+      if (sec.key === 'education') return !priorBotText.includes('teegala krishna reddy');
+      if (sec.key === 'certifications') return !priorBotText.includes('skillsbuild');
+      if (sec.key === 'skills') return !priorBotText.includes('express.js');
+      if (sec.key === 'contact') return !priorBotText.includes(personalInfo.email);
+      return false;
+    });
+
+    if (unseen) return unseen.answer;
+    return `That covers the key highlights of Varun's resume! If you'd like to discuss a role or project, reach him at ${personalInfo.email} or ${personalInfo.phone}.`;
+  }
+
+  // Unrelated topics are politely rejected
+  return POLITE_REJECTION;
+}
 
 export default function ChatAvatar({ isOpen, setIsOpen }) {
   const [messages, setMessages] = useState([INITIAL_MESSAGE]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [providerLabel, setProviderLabel] = useState('Powered by Grok AI');
+  const [providerLabel, setProviderLabel] = useState('Resume & Portfolio AI');
   const messagesEndRef = useRef(null);
   const abortRef = useRef(null);
 
@@ -86,8 +188,8 @@ export default function ChatAvatar({ isOpen, setIsOpen }) {
     }
 
     if (!replyText) {
-      replyText = findBestResponse(query);
-      setProviderLabel('Instant Knowledge Base');
+      replyText = findResumeFallback(query, historySnapshot);
+      setProviderLabel('Resume Assistant');
     }
 
     setMessages((prev) => [
@@ -209,7 +311,7 @@ export default function ChatAvatar({ isOpen, setIsOpen }) {
             <input
               type="text"
               className="chat-input-field"
-              placeholder="Ask anything about Varun..."
+              placeholder="Ask about Varun's resume..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
             />
