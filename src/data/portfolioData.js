@@ -257,8 +257,7 @@ export const SKILL_CATEGORIES = [
     category: "AI & Machine Learning",
     name: "AI & Machine Learning",
     skills: [
-      { name: "Google Gemini API", level: 95 },
-      { name: "OpenAI & LLM APIs", level: 92 },
+      { name: "API Integration & Management", level: 94 },
       { name: "Prompt Engineering", level: 95 },
       { name: "RAG & Vector Search", level: 85 },
       { name: "PyTorch & Computer Vision", level: 80 },
@@ -349,7 +348,7 @@ export const AI_KNOWLEDGE_BASE = [
   },
   {
     keywords: ["skills", "stack", "technologies", "tech"],
-    answer: "My core stack is MERN (MongoDB, Express, React, Node.js) along with Python, C++, Flutter, and AI APIs like Google Gemini and OpenAI. I also work with Three.js for 3D web interfaces!"
+    answer: "My core stack is MERN (MongoDB, Express, React, Node.js) along with Python, C++, Flutter, and AI API integration and management. I also work with Three.js for 3D web interfaces!"
   },
   {
     keywords: ["project", "projects", "work", "portfolio"],

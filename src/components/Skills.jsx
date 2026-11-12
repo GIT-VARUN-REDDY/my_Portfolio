@@ -15,7 +15,7 @@ const SKILL_GROUPS = [
   },
   {
     category: "AI",
-    skills: ["Prompt Engineering", "ChatGPT", "OpenAI APIs", "Google Gemini"]
+    skills: ["Prompt Engineering", "ChatGPT", "API Integration & Management"]
   },
   {
     category: "Tools",
