@@ -859,8 +859,7 @@ h1 em {
   position: relative;
   width: min(1360px, 95vw);
   margin: 0 auto;
-  padding: 2.2rem 0 2.6rem;
-  transform-style: preserve-3d;
+  padding: 2.4rem 0 2.8rem;
   contain: style;
 }
 
@@ -870,7 +869,7 @@ h1 em {
   top: 50%;
   width: min(560px, 84vw);
   height: 360px;
-  transform: translate3d(calc(-50% + var(--aura-shift, 0) * 32%), -50%, -130px);
+  transform: translate3d(calc(-50% + var(--aura-shift, 0) * 32%), -50%, 0);
   border-radius: 50%;
   background: radial-gradient(
     ellipse at center,
@@ -882,19 +881,20 @@ h1 em {
   pointer-events: none;
   z-index: 1;
   transition:
-    transform 0.72s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.5s ease,
-    background 0.7s ease;
+    transform 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.45s ease,
+    background 0.65s ease;
 }
 
-.work-panoramic-shell.has-hover .work-stage-aura {
+.work-panoramic-shell.has-hover .work-stage-aura,
+.work-panoramic-shell:has(.work-slot-item:hover) .work-stage-aura {
   opacity: 1;
 }
 
 :root[data-theme="light"] .work-stage-aura {
   background: radial-gradient(
     ellipse at center,
-    hsla(var(--active-hue, 215), 86%, 54%, 0.2) 0%,
+    hsla(var(--active-hue, 215), 86%, 54%, 0.22) 0%,
     hsla(var(--active-hue, 215), 82%, 58%, 0.06) 38%,
     transparent 70%
   );
@@ -907,37 +907,101 @@ h1 em {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: clamp(0.45rem, 0.9vw, 0.85rem);
   align-items: stretch;
-  perspective: 1400px;
-  perspective-origin: 50% 48%;
-  transform-style: preserve-3d;
   --pan-mult: 1;
   --hover-zoom: 1.42;
-  --hover-lift: -12px;
-  --hover-z: 120px;
+  --hover-lift: -14px;
 }
 
+/* Standard 2D stacking + per-card perspective() avoids negative-Z hit-test swallowing */
 .work-slot-item {
   position: relative;
   display: flex;
-  transform-style: preserve-3d;
+  z-index: 15;
+  opacity: 0.72;
   transform-origin: center center;
   will-change: transform, opacity;
   transform:
+    perspective(1100px)
     translate3d(
-      calc(var(--slot-tx, 0px) * var(--pan-mult)),
-      calc(var(--slot-ty, 0px) * var(--pan-mult) + var(--slot-lift, 0px)),
-      var(--slot-tz, 0px)
+      calc(var(--push-x, 0px) * var(--pan-mult)),
+      calc(var(--arc-y, 0px) * var(--pan-mult)),
+      0
     )
-    rotateY(calc(var(--slot-ry, 0deg) * var(--pan-mult)))
-    scale(var(--slot-sc, 1));
+    rotateY(calc(var(--arc-ry, 0deg) * var(--pan-mult)))
+    scale(1);
   transition:
-    transform 0.62s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+    transform 0.58s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Project-colored outer glow rendered cleanly behind the glass card */
+.work-slot-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 1.35rem;
+  pointer-events: none;
+  z-index: 0;
+  box-shadow:
+    0 26px 56px hsla(var(--hu, 215), 88%, 52%, 0.38),
+    0 0 32px hsla(var(--hu, 215), 92%, 62%, 0.26);
+  opacity: 0;
+  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root[data-theme="light"] .work-slot-item::before {
+  box-shadow:
+    0 24px 52px rgba(15, 38, 86, 0.22),
+    0 0 28px hsla(var(--hu, 215), 85%, 54%, 0.2);
+}
+
+/* Edge cards stay inside viewport cleanly during hover zoom */
+.work-slot-item[data-slot="0"]:hover,
+.work-slot-item[data-slot="0"].is-hovered {
+  --edge-nudge: 22px;
+}
+
+.work-slot-item[data-slot="5"]:hover,
+.work-slot-item[data-slot="5"].is-hovered {
+  --edge-nudge: -22px;
+}
+
+/* Hovered Card: guaranteed 100% opacity & dramatic zoom via BOTH CSS :hover and React .is-hovered */
+.work-slot-item:hover,
+.work-slot-item.is-hovered {
+  z-index: 60 !important;
+  opacity: 1 !important;
+  transform:
+    perspective(1100px)
+    translate3d(calc(var(--edge-nudge, 0px) * var(--pan-mult)), var(--hover-lift), 0)
+    rotateY(0deg)
+    scale(var(--hover-zoom)) !important;
+}
+
+.work-slot-item:hover::before,
+.work-slot-item.is-hovered::before {
+  opacity: 1;
+}
+
+/* Non-hovered sibling cards recede smoothly so hovered card pops heroically */
+.work-panoramic-grid:has(.work-slot-item:hover) .work-slot-item:not(:hover),
+.work-slot-item.is-dimmed {
+  opacity: 0.38;
+  transform:
+    perspective(1100px)
+    translate3d(
+      calc(var(--push-x, 0px) * var(--pan-mult)),
+      calc(var(--arc-y, 6px) * var(--pan-mult)),
+      0
+    )
+    rotateY(calc(var(--arc-ry, 0deg) * var(--pan-mult)))
+    scale(var(--dim-sc, 0.88));
 }
 
 /* Work Card (.wk) - Frosted Crystal Glass Slot */
 .wk {
   position: relative;
+  z-index: 1;
   width: 100%;
   background: var(--glass-card);
   backdrop-filter: blur(12px) saturate(165%);
@@ -950,41 +1014,17 @@ h1 em {
   flex-direction: column;
   justify-content: space-between;
   cursor: pointer;
-  transform-style: preserve-3d;
   user-select: none;
   outline: none;
-  transform: rotateX(var(--card-rx, 0deg)) rotateY(var(--card-ry, 0deg));
+  transform: perspective(900px) rotateX(var(--card-rx, 0deg)) rotateY(var(--card-ry, 0deg));
   transition:
     transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
     border-color 0.35s ease;
 }
 
-.wk::after {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: -1;
-  box-shadow:
-    0 24px 54px hsla(var(--hu, 215), 88%, 52%, 0.34),
-    0 0 28px hsla(var(--hu, 215), 92%, 62%, 0.22);
-  opacity: 0;
-  transition: opacity 0.48s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-:root[data-theme="light"] .wk::after {
-  box-shadow:
-    0 24px 52px rgba(15, 38, 86, 0.2),
-    0 0 26px hsla(var(--hu, 215), 85%, 54%, 0.18);
-}
-
+.work-slot-item:hover .wk,
 .wk.is-hovered {
-  border-color: color-mix(in srgb, var(--first) 45%, var(--glass-border));
-}
-
-.wk.is-hovered::after {
-  opacity: 1;
+  border-color: color-mix(in srgb, var(--first) 48%, var(--glass-border));
 }
 
 /* Clipped Inner Specular Glare + Diagonal Cinematic Light Sweep */
@@ -1002,7 +1042,7 @@ h1 em {
   inset: 0;
   background: radial-gradient(
     circle 210px at var(--mx, 50%) var(--my, 50%),
-    rgba(255, 255, 255, 0.14),
+    rgba(255, 255, 255, 0.16),
     transparent 65%
   );
   opacity: 0;
@@ -1012,11 +1052,12 @@ h1 em {
 :root[data-theme="light"] .wk-glare {
   background: radial-gradient(
     circle 210px at var(--mx, 50%) var(--my, 50%),
-    rgba(31, 95, 209, 0.14),
+    rgba(31, 95, 209, 0.16),
     transparent 65%
   );
 }
 
+.work-slot-item:hover .wk-glare,
 .wk.is-hovered .wk-glare {
   opacity: 1;
 }
@@ -1030,13 +1071,14 @@ h1 em {
   background: linear-gradient(
     110deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.24) 50%,
     transparent 100%
   );
   transform: translate3d(-120%, 0, 0) rotate(14deg);
   opacity: 0;
 }
 
+.work-slot-item:hover .wk-light-sweep,
 .wk.is-hovered .wk-light-sweep {
   animation: cardLightSweep 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
@@ -1047,7 +1089,7 @@ h1 em {
     opacity: 0;
   }
   25% {
-    opacity: 0.75;
+    opacity: 0.8;
   }
   100% {
     transform: translate3d(340%, 0, 0) rotate(14deg);
@@ -1064,10 +1106,9 @@ h1 em {
   background: linear-gradient(135deg, hsl(var(--hu, 210) 70% 38%), hsl(var(--hu, 210) 60% 10%));
   display: grid;
   place-items: center;
-  transform: translateZ(20px);
 }
 
-/* Smooth GPU-composited resting/dimmed artwork veil (0 on hover -> vivid 100% artwork) */
+/* Smooth GPU-composited resting/dimmed artwork veil (0 on hover -> 100% vivid artwork) */
 .cv::after {
   content: "";
   position: absolute;
@@ -1075,12 +1116,22 @@ h1 em {
   z-index: 2;
   pointer-events: none;
   background: rgba(6, 10, 20, 0.56);
-  opacity: var(--veil-op, 0.36);
-  transition: opacity 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+  opacity: 0.38;
+  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 :root[data-theme="light"] .cv::after {
   background: rgba(232, 240, 252, 0.48);
+}
+
+.work-slot-item:hover .cv::after,
+.work-slot-item.is-hovered .cv::after {
+  opacity: 0 !important;
+}
+
+.work-panoramic-grid:has(.work-slot-item:hover) .work-slot-item:not(:hover) .cv::after,
+.work-slot-item.is-dimmed .cv::after {
+  opacity: 0.78;
 }
 
 .cv img {
@@ -1094,6 +1145,7 @@ h1 em {
   will-change: transform;
 }
 
+.work-slot-item:hover .cv img,
 .wk.is-hovered .cv img {
   transform: scale(1.12);
 }
@@ -1102,7 +1154,6 @@ h1 em {
   font-family: var(--h);
   font-size: 4.5rem;
   color: rgba(255, 255, 255, 0.88);
-  transform: translateZ(36px);
   text-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 
@@ -1123,9 +1174,10 @@ h1 em {
   transition: background-color 0.4s ease, transform 0.4s ease;
 }
 
+.work-slot-item:hover .cv i s,
 .wk.is-hovered .cv i s {
-  background: rgba(255, 255, 255, 0.9);
-  transform: scale(1.12);
+  background: rgba(255, 255, 255, 0.92);
+  transform: scale(1.15);
 }
 
 /* Name + Animated Open Arrow Footer Row */
@@ -1135,7 +1187,6 @@ h1 em {
   align-items: center;
   gap: 0.5rem;
   padding: 0.72rem 0.25rem 0.05rem;
-  transform: translateZ(22px);
 }
 
 .wk-meta {
@@ -1174,17 +1225,20 @@ h1 em {
   transform: translate(-150%, 150%);
 }
 
+.work-slot-item:hover .go,
 .wk.is-hovered .go,
 .go:hover {
   transform: scale(1.12);
   box-shadow: 0 6px 22px var(--first-glow);
 }
 
+.work-slot-item:hover .go .arrow-primary,
 .wk.is-hovered .go .arrow-primary,
 .go:hover .arrow-primary {
   transform: translate(150%, -150%);
 }
 
+.work-slot-item:hover .go .arrow-secondary,
 .wk.is-hovered .go .arrow-secondary,
 .go:hover .arrow-secondary {
   transform: translate(0, 0);
@@ -1213,6 +1267,7 @@ h1 em {
   transition: color 0.35s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.work-slot-item:hover .wk h3,
 .wk.is-hovered h3 {
   color: var(--first);
   transform: translateX(3px);
@@ -1233,9 +1288,8 @@ h1 em {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.9rem;
     --pan-mult: 0;
-    --hover-zoom: 1.07;
+    --hover-zoom: 1.08;
     --hover-lift: -6px;
-    --hover-z: 40px;
   }
   .wk .n {
     font-size: 0.95rem;
@@ -1259,7 +1313,6 @@ h1 em {
     --pan-mult: 0;
     --hover-zoom: 1.05;
     --hover-lift: -4px;
-    --hover-z: 30px;
   }
   .wk .n {
     font-size: 0.88rem;

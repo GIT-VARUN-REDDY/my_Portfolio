@@ -94,39 +94,26 @@ function Works({ onSelectProject }) {
             const hasAnyHover = hoveredIdx !== null;
             const centerOffset = idx - (total - 1) / 2;
 
-            let slotTx = 0;
-            let slotTy = Math.abs(centerOffset) * Math.abs(centerOffset) * 2.1;
-            let slotTz = -Math.abs(centerOffset) * 9;
-            let slotRy = -centerOffset * 3.4;
-            let slotLift = '0px';
-            let slotScale = '1';
-            let slotOp = 0.78;
-            let veilOp = 0.36;
+            // Compute smooth panoramic resting arc & neighbor parting offsets
+            let pushX = 0;
+            let arcY = Math.abs(centerOffset) * Math.abs(centerOffset) * 2.1;
+            let arcRy = -centerOffset * 4.2;
+            let dimScale = 0.88;
             let zIndex = 20 - Math.round(Math.abs(centerOffset));
 
             if (hasAnyHover) {
               if (isHovered) {
-                slotTx = idx === 0 ? 22 : idx === total - 1 ? -22 : 0;
-                slotTy = 0;
-                slotTz = 120;
-                slotRy = 0;
-                slotLift = 'var(--hover-lift, -12px)';
-                slotScale = 'var(--hover-zoom, 1.42)';
-                slotOp = 1;
-                veilOp = 0;
-                zIndex = 50;
+                pushX = idx === 0 ? 22 : idx === total - 1 ? -22 : 0;
+                zIndex = 60;
               } else {
                 const diff = idx - hoveredIdx;
                 const sign = diff < 0 ? -1 : 1;
                 const absD = Math.abs(diff);
 
-                slotTx = sign * (absD === 1 ? 22 : absD === 2 ? 14 : 8);
-                slotTy = 6 + absD * 2.8;
-                slotTz = -28 - absD * 14;
-                slotRy = -sign * (4.5 + absD * 2.2);
-                slotScale = (Math.max(0.84, 0.93 - absD * 0.025)).toFixed(3);
-                slotOp = Math.max(0.38, 0.56 - absD * 0.05);
-                veilOp = 0.78;
+                pushX = sign * (absD === 1 ? 20 : absD === 2 ? 12 : 6);
+                arcY = 6 + absD * 2.8;
+                arcRy = -sign * (5 + absD * 2);
+                dimScale = Math.max(0.83, 0.92 - absD * 0.025);
                 zIndex = 12 - absD;
               }
             }
@@ -134,19 +121,16 @@ function Works({ onSelectProject }) {
             return (
               <div
                 key={project.id}
+                data-slot={idx}
                 className={`work-slot-item${isHovered ? ' is-hovered' : ''}${
                   hasAnyHover && !isHovered ? ' is-dimmed' : ''
                 }`}
                 style={{
                   zIndex,
-                  opacity: slotOp,
-                  '--slot-tx': `${slotTx}px`,
-                  '--slot-ty': `${slotTy.toFixed(1)}px`,
-                  '--slot-tz': isHovered ? 'var(--hover-z, 120px)' : `calc(${slotTz.toFixed(1)}px * var(--pan-mult, 1))`,
-                  '--slot-ry': `${slotRy.toFixed(2)}deg`,
-                  '--slot-lift': slotLift,
-                  '--slot-sc': slotScale,
-                  '--veil-op': veilOp,
+                  '--push-x': `${pushX}px`,
+                  '--arc-y': `${arcY.toFixed(1)}px`,
+                  '--arc-ry': `${arcRy.toFixed(2)}deg`,
+                  '--dim-sc': dimScale.toFixed(3),
                   '--hu': project.hue || 210
                 }}
                 onMouseEnter={() => handleCardEnter(idx, project)}
