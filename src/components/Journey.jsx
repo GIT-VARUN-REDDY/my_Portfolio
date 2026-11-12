@@ -15,11 +15,6 @@ const JOURNEY_ITEMS = [
     period: "Sep 2026",
     title: "Technical Associate Intern",
     description: "Ample Semiconductors, since September 2026."
-  },
-  {
-    period: "2",
-    title: "Certifications",
-    description: "EY GDS AICTE MERN Stack Certification and IBM SkillsBuild Career Management Essentials."
   }
 ];
 
