@@ -189,31 +189,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
   will-change: transform;
 }
 
-/* Interactive Cursor Spotlight Halo */
-#cr {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 1;
-  width: 360px;
-  height: 360px;
-  margin: -180px;
-  border-radius: 50%;
-  pointer-events: none;
-  opacity: 0;
-  contain: strict;
-  transform: translate3d(-500px, -500px, 0);
-  background: radial-gradient(circle, color-mix(in srgb, var(--first) 24%, transparent), transparent 65%);
-  transition: opacity 0.7s ease;
-  will-change: transform;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  #cr {
-    opacity: 1;
-  }
-}
-
 /* Container */
 .c {
   width: min(1120px, 90%);

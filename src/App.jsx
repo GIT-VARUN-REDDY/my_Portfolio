@@ -63,7 +63,6 @@ export default function App() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
-  const cursorRef = useRef(null);
   const activeTransitionRef = useRef(null);
   const waveCleanupRef = useRef(null);
 
@@ -282,11 +281,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Continuous Reversible 60/120FPS Scroll-Scrubbed 3D Engine + Damped Hover Tilt & Halo
+  // Continuous Reversible 60/120FPS Scroll-Scrubbed 3D Engine + Damped Hover Tilt
   // Runs strictly on-demand via rAF and sleeps at 0% CPU when settled.
   useEffect(() => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const cr = cursorRef.current;
     const bar = document.getElementById('bar');
     const hc = document.getElementById('hc');
     const heroTxt = document.getElementById('hero-txt');
@@ -294,13 +292,10 @@ export default function App() {
     let vpWidth = window.innerWidth || 1280;
     let vpHeight = window.innerHeight || 800;
     let cx = -500, cy = -500;
-    let gx = -500, gy = -500;
-    let gs = 1, gz = 1;
     let mx = 0, my = 0;
     let smx = 0, smy = 0;
     let smoothScrollY = window.scrollY;
     let lastDrawnScrollY = -99999;
-    let lastCursorKey = '';
     let lastBarScale = '';
     let lastHeroTransform = '';
     let lastHeroOpacity = '';
@@ -324,7 +319,6 @@ export default function App() {
     const activeTiltingCards = new Set();
     let s3dNodes = [];
 
-    const INTERACTIVE_SELECTOR = 'a, button, input, textarea, .ic, .sk, .wk, .stat-card, .quick-facts-card, .jc';
     const clamp = (v, min, max) => (v < min ? min : v > max ? max : v);
     const smoothstep = (t) => t * t * (3 - 2 * t);
 
@@ -471,25 +465,6 @@ export default function App() {
       wakeLoop();
     };
 
-    const handlePointerOver = (e) => {
-      if (e.target && e.target.closest && e.target.closest(INTERACTIVE_SELECTOR)) {
-        if (gs !== 1.55) {
-          gs = 1.55;
-          wakeLoop();
-        }
-      }
-    };
-
-    const handlePointerOut = (e) => {
-      const next = e.relatedTarget;
-      if (!next || !next.closest || !next.closest(INTERACTIVE_SELECTOR)) {
-        if (gs !== 1) {
-          gs = 1;
-          wakeLoop();
-        }
-      }
-    };
-
     const handleScroll = () => {
       wakeLoop();
     };
@@ -516,23 +491,6 @@ export default function App() {
 
       const vh = vpHeight;
       const docH = cachedDocHeight || vh;
-
-      // Cursor halo smooth time-normalized spring (crisp velvety glide)
-      const cursorFollow = 1 - Math.exp(-12.5 * dt);
-      gx += (cx - gx) * cursorFollow;
-      gy += (cy - gy) * cursorFollow;
-      gz += (gs - gz) * (1 - Math.exp(-10 * dt));
-      if (Math.abs(cx - gx) < 0.08) gx = cx;
-      if (Math.abs(cy - gy) < 0.08) gy = cy;
-      if (Math.abs(gs - gz) < 0.003) gz = gs;
-
-      if (cr) {
-        const cursorKey = `${gx.toFixed(1)},${gy.toFixed(1)},${gz.toFixed(3)}`;
-        if (cursorKey !== lastCursorKey) {
-          lastCursorKey = cursorKey;
-          cr.style.transform = `translate3d(${gx.toFixed(1)}px, ${gy.toFixed(1)}px, 0) scale(${gz.toFixed(3)})`;
-        }
-      }
 
       // Smooth time-normalized scroll tracking (snappy & silky deceleration)
       const scrollDiff = targetScroll - smoothScrollY;
@@ -793,11 +751,10 @@ export default function App() {
         }
       }
 
-      const cursorSettled = cx === gx && cy === gy && gs === gz;
       const scrollSettled = smoothScrollY === targetScroll;
       const heroSettled = reduceMotion || (mx === smx && my === smy);
 
-      if (cursorSettled && scrollSettled && heroSettled && activeTiltingCards.size === 0 && !pointerDirty && !needsMeasure) {
+      if (scrollSettled && heroSettled && activeTiltingCards.size === 0 && !pointerDirty && !needsMeasure) {
         animId = null;
       } else {
         animId = requestAnimationFrame(loop);
@@ -807,7 +764,6 @@ export default function App() {
     const handleDocumentLeave = () => {
       latestPointerTarget = null;
       pointerDirty = false;
-      gs = 1;
       if (activeTilt) {
         const prevSt = getTiltState(activeTilt);
         prevSt.targetX = 0;
@@ -827,8 +783,6 @@ export default function App() {
     };
 
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    document.addEventListener('pointerover', handlePointerOver, { passive: true });
-    document.addEventListener('pointerout', handlePointerOut, { passive: true });
     document.addEventListener('mouseleave', handleDocumentLeave);
     window.addEventListener('blur', handleDocumentLeave);
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -847,8 +801,6 @@ export default function App() {
 
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
-      document.removeEventListener('pointerover', handlePointerOver);
-      document.removeEventListener('pointerout', handlePointerOut);
       document.removeEventListener('mouseleave', handleDocumentLeave);
       window.removeEventListener('blur', handleDocumentLeave);
       window.removeEventListener('scroll', handleScroll);
@@ -862,9 +814,6 @@ export default function App() {
     <div className="portfolio-app">
       {/* Top Scroll Progress Bar */}
       <div id="bar" />
-
-      {/* Interactive Cursor Spotlight Glow */}
-      <div id="cr" ref={cursorRef} />
 
       {/* Three.js Particle & Shader Orbs Background */}
       <ThreeBackground theme={theme} themeRipple={themeRipple} />
