@@ -934,27 +934,6 @@ h1 em {
     opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Project-colored outer glow rendered cleanly behind the glass card */
-.work-slot-item::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 1.35rem;
-  pointer-events: none;
-  z-index: 0;
-  box-shadow:
-    0 26px 56px hsla(var(--hu, 215), 88%, 52%, 0.38),
-    0 0 32px hsla(var(--hu, 215), 92%, 62%, 0.26);
-  opacity: 0;
-  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-:root[data-theme="light"] .work-slot-item::before {
-  box-shadow:
-    0 24px 52px rgba(15, 38, 86, 0.22),
-    0 0 28px hsla(var(--hu, 215), 85%, 54%, 0.2);
-}
-
 /* Edge cards stay inside viewport cleanly during hover zoom */
 .work-slot-item[data-slot="0"]:hover,
 .work-slot-item[data-slot="0"].is-hovered {
@@ -978,11 +957,6 @@ h1 em {
     scale(var(--hover-zoom)) !important;
 }
 
-.work-slot-item:hover::before,
-.work-slot-item.is-hovered::before {
-  opacity: 1;
-}
-
 /* Non-hovered sibling cards recede smoothly so hovered card pops heroically */
 .work-panoramic-grid:has(.work-slot-item:hover) .work-slot-item:not(:hover),
 .work-slot-item.is-dimmed {
@@ -998,7 +972,7 @@ h1 em {
     scale(var(--dim-sc, 0.88));
 }
 
-/* Work Card (.wk) - Frosted Crystal Glass Slot */
+/* Work Card (.wk) - Borderless, Shadowless Frosted Glass Slot */
 .wk {
   position: relative;
   z-index: 1;
@@ -1006,8 +980,8 @@ h1 em {
   background: var(--glass-card);
   backdrop-filter: blur(12px) saturate(165%);
   -webkit-backdrop-filter: blur(12px) saturate(165%);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-highlight), var(--glass-shadow);
+  border: none;
+  box-shadow: none;
   border-radius: 1.35rem;
   padding: clamp(0.48rem, 0.7vw, 0.7rem) clamp(0.48rem, 0.7vw, 0.7rem) clamp(0.68rem, 0.95vw, 0.95rem);
   display: flex;
@@ -1017,14 +991,7 @@ h1 em {
   user-select: none;
   outline: none;
   transform: perspective(900px) rotateX(var(--card-rx, 0deg)) rotateY(var(--card-ry, 0deg));
-  transition:
-    transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 0.35s ease;
-}
-
-.work-slot-item:hover .wk,
-.wk.is-hovered {
-  border-color: color-mix(in srgb, var(--first) 48%, var(--glass-border));
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Clipped Inner Specular Glare + Diagonal Cinematic Light Sweep */
