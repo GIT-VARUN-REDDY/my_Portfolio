@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 const JOURNEY_ITEMS = [
   {
@@ -23,7 +23,7 @@ const JOURNEY_ITEMS = [
   }
 ];
 
-export default function Journey() {
+export default memo(function Journey() {
   return (
     <section id="journey">
       <div className="c">
@@ -49,4 +49,4 @@ export default function Journey() {
       </div>
     </section>
   );
-}
+});

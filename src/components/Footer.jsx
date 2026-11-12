@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { ArrowUp } from 'lucide-react';
 
-export default function Footer() {
+export default memo(function Footer() {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -38,4 +38,4 @@ export default function Footer() {
       </div>
     </footer>
   );
-}
+});

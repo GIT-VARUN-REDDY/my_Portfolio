@@ -39,6 +39,7 @@ export default function ProjectModal({ project, onClose }) {
             src={project.image}
             alt={project.title}
             className="modal-image"
+            decoding="async"
           />
           <div className="modal-badge-overlay">
             <span className="modal-category-badge">{project.category}</span>

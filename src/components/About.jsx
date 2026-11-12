@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Download } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { personalInfo } from '../data/portfolioData';
 
-export default function About() {
+export default memo(function About() {
   const handleResumeDownload = () => {
     try {
       confetti({
@@ -75,4 +75,4 @@ export default function About() {
       </div>
     </section>
   );
-}
+});

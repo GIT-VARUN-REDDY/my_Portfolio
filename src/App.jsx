@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import ThreeBackground from './components/ThreeBackground';
 import Navbar from './components/Navbar';
@@ -16,7 +16,7 @@ import Footer from './components/Footer';
 
 // Builds a smooth undulating organic liquid wave polygon clip-path frame
 function buildFluidWaveClipPath(ox, oy, radius, waveStrength, phase) {
-  const steps = 72;
+  const steps = 44;
   const pts = [];
   for (let i = 0; i < steps; i++) {
     const theta = (i / steps) * Math.PI * 2;
@@ -152,7 +152,7 @@ export default function App() {
     vt.ready
       .then(() => {
         // Generate silky undulating organic wave polygon keyframes from the toggle button
-        const frameCount = 32;
+        const frameCount = 24;
         const clipKeyframes = [];
         for (let step = 0; step <= frameCount; step++) {
           const p = step / frameCount;
@@ -236,9 +236,29 @@ export default function App() {
       });
   };
 
-  const showToast = (msg) => {
+  const showToast = useCallback((msg) => {
     setToastMessage(msg);
-  };
+  }, []);
+
+  const handleOpenCommandPalette = useCallback(() => {
+    setIsCommandPaletteOpen(true);
+  }, []);
+
+  const handleCloseCommandPalette = useCallback(() => {
+    setIsCommandPaletteOpen(false);
+  }, []);
+
+  const handleOpenChat = useCallback(() => {
+    setIsChatOpen(true);
+  }, []);
+
+  const handleCloseProject = useCallback(() => {
+    setActiveProject(null);
+  }, []);
+
+  const handleOpenContact = useCallback(() => {
+    document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
 
   useEffect(() => {
     if (toastMessage) {
@@ -262,31 +282,49 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Continuous Reversible 60FPS Scroll-Scrubbed 3D Engine + Damped Hover Tilt & Halo
+  // Continuous Reversible 60/120FPS Scroll-Scrubbed 3D Engine + Damped Hover Tilt & Halo
+  // Runs strictly on-demand via rAF and sleeps at 0% CPU when settled.
   useEffect(() => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const cr = cursorRef.current;
     const bar = document.getElementById('bar');
-    const hd = document.querySelector('header');
     const hc = document.getElementById('hc');
     const heroTxt = document.getElementById('hero-txt');
 
+    let vpWidth = window.innerWidth || 1280;
+    let vpHeight = window.innerHeight || 800;
     let cx = -500, cy = -500;
     let gx = -500, gy = -500;
     let gs = 1, gz = 1;
     let mx = 0, my = 0;
     let smx = 0, smy = 0;
     let smoothScrollY = window.scrollY;
+    let lastDrawnScrollY = -99999;
+    let lastCursorKey = '';
+    let lastBarScale = '';
+    let lastHeroTransform = '';
+    let lastHeroOpacity = '';
+    let lastHcTransform = '';
+    let lastHcOpacity = '';
     let lastLoopTime = performance.now();
     let cachedDocHeight = 0;
     let activeTilt = null;
+    let tiltRect = null;
+    let tiltRectScrollY = -1;
     let activeMag = null;
-    let animId;
+    let magRect = null;
+    let magRectScrollY = -1;
+    let latestPointerTarget = null;
+    let pointerDirty = false;
+    let needsMeasure = false;
+    let animId = null;
 
     const tiltStates = new WeakMap();
+    const nodeByEl = new WeakMap();
     const activeTiltingCards = new Set();
     let s3dNodes = [];
 
+    const INTERACTIVE_SELECTOR = 'a, button, input, textarea, .ic, .sk, .wk, .stat-card, .quick-facts-card, .jc';
     const clamp = (v, min, max) => (v < min ? min : v > max ? max : v);
     const smoothstep = (t) => t * t * (3 - 2 * t);
 
@@ -301,6 +339,9 @@ export default function App() {
     };
 
     const measureNodes = () => {
+      vpWidth = window.innerWidth || 1280;
+      vpHeight = window.innerHeight || 800;
+
       const gridEl = document.getElementById('wg');
       let deckCols = 1;
       if (gridEl && gridEl.children.length > 0) {
@@ -310,20 +351,35 @@ export default function App() {
 
       const elements = document.querySelectorAll('.s3d');
       s3dNodes = Array.from(elements).map((el) => {
+        const prev = nodeByEl.get(el);
         const mode = el.dataset.s3d || 'rise';
         const idx = Number(el.dataset.idx || 0);
         const colSlot = mode === 'deck' ? (idx % deckCols) - (deckCols - 1) / 2 : 0;
-        return {
+        const item = {
           el,
           mode,
           idx,
           deckCols,
           colSlot,
           top: getDocTop(el),
-          height: el.offsetHeight || 100
+          height: el.offsetHeight || 100,
+          hrx: prev ? prev.hrx : 0,
+          hry: prev ? prev.hry : 0,
+          tiltDirty: true,
+          forceUpdate: true,
+          offscreenSettled: false,
+          lastTransform: prev ? prev.lastTransform : '',
+          lastOpacity: prev ? prev.lastOpacity : '',
+          lastCvPy: prev ? prev.lastCvPy : '',
+          lastSrProg: prev ? prev.lastSrProg : ''
         };
+        nodeByEl.set(el, item);
+        return item;
       });
       cachedDocHeight = document.documentElement.scrollHeight;
+      tiltRect = null;
+      magRect = null;
+      needsMeasure = false;
     };
 
     const getTiltState = (el) => {
@@ -335,316 +391,470 @@ export default function App() {
       return st;
     };
 
+    const wakeLoop = () => {
+      if (animId === null) {
+        lastLoopTime = performance.now();
+        animId = requestAnimationFrame(loop);
+      }
+    };
+
+    const processPointer = (curScrollY) => {
+      pointerDirty = false;
+      if (reduceMotion) return;
+
+      const target = latestPointerTarget;
+      const tiltTarget = target && target.closest ? target.closest('.tilt') : null;
+
+      if (activeTilt && activeTilt !== tiltTarget) {
+        const prevSt = getTiltState(activeTilt);
+        prevSt.targetX = 0;
+        prevSt.targetY = 0;
+        activeTilt.classList.remove('glaring');
+        tiltRect = null;
+      }
+      if (tiltTarget && tiltTarget !== activeTilt) {
+        tiltRect = tiltTarget.getBoundingClientRect();
+        tiltRectScrollY = curScrollY;
+      }
+      activeTilt = tiltTarget || null;
+
+      if (activeTilt) {
+        if (!tiltRect || tiltRectScrollY !== curScrollY) {
+          tiltRect = activeTilt.getBoundingClientRect();
+          tiltRectScrollY = curScrollY;
+        }
+        const px = (cx - tiltRect.left) / Math.max(1, tiltRect.width);
+        const py = (cy - tiltRect.top) / Math.max(1, tiltRect.height);
+        const x = px - 0.5;
+        const y = py - 0.5;
+        const st = getTiltState(activeTilt);
+        st.targetX = -y * 13;
+        st.targetY = x * 13;
+        activeTiltingCards.add(activeTilt);
+        activeTilt.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`);
+        activeTilt.style.setProperty('--my', `${(py * 100).toFixed(1)}%`);
+        activeTilt.classList.add('glaring');
+      }
+
+      // Subtle magnetic feel on buttons & arrows
+      const magTarget = target && target.closest ? target.closest('.btn, .go, .theme-toggle-btn') : null;
+      if (activeMag && activeMag !== magTarget) {
+        activeMag.style.setProperty('--mag-x', '0px');
+        activeMag.style.setProperty('--mag-y', '0px');
+        magRect = null;
+      }
+      if (magTarget && magTarget !== activeMag) {
+        magRect = magTarget.getBoundingClientRect();
+        magRectScrollY = curScrollY;
+      }
+      activeMag = magTarget || null;
+
+      if (activeMag) {
+        if (!magRect || magRectScrollY !== curScrollY) {
+          magRect = activeMag.getBoundingClientRect();
+          magRectScrollY = curScrollY;
+        }
+        const dx = (cx - (magRect.left + magRect.width / 2)) / Math.max(1, magRect.width / 2);
+        const dy = (cy - (magRect.top + magRect.height / 2)) / Math.max(1, magRect.height / 2);
+        activeMag.style.setProperty('--mag-x', `${(dx * 5).toFixed(1)}px`);
+        activeMag.style.setProperty('--mag-y', `${(dy * 5).toFixed(1)}px`);
+      }
+    };
+
     const handlePointerMove = (e) => {
       cx = e.clientX;
       cy = e.clientY;
-      mx = (e.clientX / window.innerWidth) * 2 - 1;
-      my = (e.clientY / window.innerHeight) * 2 - 1;
+      mx = (cx / vpWidth) * 2 - 1;
+      my = (cy / vpHeight) * 2 - 1;
+      latestPointerTarget = e.target;
+      pointerDirty = true;
+      wakeLoop();
+    };
 
-      if (!reduceMotion) {
-        const tiltTarget = e.target.closest && e.target.closest('.tilt');
-        if (activeTilt && activeTilt !== tiltTarget) {
-          const prevSt = getTiltState(activeTilt);
-          prevSt.targetX = 0;
-          prevSt.targetY = 0;
-          activeTilt.classList.remove('glaring');
-        }
-        activeTilt = tiltTarget || null;
-
-        if (tiltTarget) {
-          const rect = tiltTarget.getBoundingClientRect();
-          const px = (e.clientX - rect.left) / Math.max(1, rect.width);
-          const py = (e.clientY - rect.top) / Math.max(1, rect.height);
-          const x = px - 0.5;
-          const y = py - 0.5;
-          const st = getTiltState(tiltTarget);
-          st.targetX = -y * 13;
-          st.targetY = x * 13;
-          activeTiltingCards.add(tiltTarget);
-          tiltTarget.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`);
-          tiltTarget.style.setProperty('--my', `${(py * 100).toFixed(1)}%`);
-          tiltTarget.classList.add('glaring');
-        }
-
-        // Subtle magnetic feel on buttons & arrows
-        const magTarget = e.target.closest && e.target.closest('.btn, .go, .theme-toggle-btn');
-        if (activeMag && activeMag !== magTarget) {
-          activeMag.style.setProperty('--mag-x', '0px');
-          activeMag.style.setProperty('--mag-y', '0px');
-        }
-        activeMag = magTarget || null;
-
-        if (magTarget) {
-          const rect = magTarget.getBoundingClientRect();
-          const dx = (e.clientX - (rect.left + rect.width / 2)) / Math.max(1, rect.width / 2);
-          const dy = (e.clientY - (rect.top + rect.height / 2)) / Math.max(1, rect.height / 2);
-          magTarget.style.setProperty('--mag-x', `${(dx * 5).toFixed(1)}px`);
-          magTarget.style.setProperty('--mag-y', `${(dy * 5).toFixed(1)}px`);
+    const handlePointerOver = (e) => {
+      if (e.target && e.target.closest && e.target.closest(INTERACTIVE_SELECTOR)) {
+        if (gs !== 1.55) {
+          gs = 1.55;
+          wakeLoop();
         }
       }
     };
 
-    const handlePointerEnter = () => { gs = 1.55; };
-    const handlePointerLeave = () => { gs = 1; };
+    const handlePointerOut = (e) => {
+      const next = e.relatedTarget;
+      if (!next || !next.closest || !next.closest(INTERACTIVE_SELECTOR)) {
+        if (gs !== 1) {
+          gs = 1;
+          wakeLoop();
+        }
+      }
+    };
 
-    const attachHoverListeners = () => {
-      document.querySelectorAll('a, button, input, textarea, .ic, .sk, .wk, .stat-card, .quick-facts-card, .jc').forEach((el) => {
-        el.removeEventListener('pointerenter', handlePointerEnter);
-        el.removeEventListener('pointerleave', handlePointerLeave);
-        el.addEventListener('pointerenter', handlePointerEnter);
-        el.addEventListener('pointerleave', handlePointerLeave);
-      });
+    const handleScroll = () => {
+      wakeLoop();
+    };
+
+    const scheduleMeasure = () => {
+      needsMeasure = true;
+      wakeLoop();
     };
 
     measureNodes();
-    attachHoverListeners();
 
     const loop = (now) => {
-      animId = requestAnimationFrame(loop);
       const dt = clamp((now - lastLoopTime) / 1000, 0.004, 0.16);
       lastLoopTime = now;
 
-      // Re-measure cleanly only if page height shifted (e.g., fonts/images loaded)
-      const docH = document.documentElement.scrollHeight;
-      if (docH !== cachedDocHeight) {
+      if (needsMeasure) {
         measureNodes();
       }
 
-      const vh = window.innerHeight || 800;
-
-      // Cursor halo smooth time-normalized spring (velvety slow-motion glide)
-      const cursorFollow = 1 - Math.exp(-5.5 * dt);
-      gx += (cx - gx) * cursorFollow;
-      gy += (cy - gy) * cursorFollow;
-      gz += (gs - gz) * (1 - Math.exp(-5 * dt));
-      if (cr) {
-        cr.style.transform = `translate(${gx}px, ${gy}px) scale(${gz})`;
+      const targetScroll = window.scrollY;
+      if (pointerDirty) {
+        processPointer(targetScroll);
       }
 
-      // Smooth time-normalized scroll tracking (luxurious slow-motion deceleration)
-      const targetScroll = window.scrollY;
+      const vh = vpHeight;
+      const docH = cachedDocHeight || vh;
+
+      // Cursor halo smooth time-normalized spring (crisp velvety glide)
+      const cursorFollow = 1 - Math.exp(-12.5 * dt);
+      gx += (cx - gx) * cursorFollow;
+      gy += (cy - gy) * cursorFollow;
+      gz += (gs - gz) * (1 - Math.exp(-10 * dt));
+      if (Math.abs(cx - gx) < 0.08) gx = cx;
+      if (Math.abs(cy - gy) < 0.08) gy = cy;
+      if (Math.abs(gs - gz) < 0.003) gz = gs;
+
+      if (cr) {
+        const cursorKey = `${gx.toFixed(1)},${gy.toFixed(1)},${gz.toFixed(3)}`;
+        if (cursorKey !== lastCursorKey) {
+          lastCursorKey = cursorKey;
+          cr.style.transform = `translate3d(${gx.toFixed(1)}px, ${gy.toFixed(1)}px, 0) scale(${gz.toFixed(3)})`;
+        }
+      }
+
+      // Smooth time-normalized scroll tracking (snappy & silky deceleration)
       const scrollDiff = targetScroll - smoothScrollY;
-      const scrollLambda = Math.abs(scrollDiff) > vh * 1.1 ? 14 : 7.5;
+      const scrollLambda = Math.abs(scrollDiff) > vh * 1.1 ? 20 : 13;
       smoothScrollY += scrollDiff * (1 - Math.exp(-scrollLambda * dt));
-      if (Math.abs(targetScroll - smoothScrollY) < 0.2) {
+      if (Math.abs(targetScroll - smoothScrollY) < 0.15) {
         smoothScrollY = targetScroll;
+      }
+
+      const scrollChanged =
+        Math.abs(smoothScrollY - lastDrawnScrollY) > 0.05 ||
+        (smoothScrollY === targetScroll && lastDrawnScrollY !== smoothScrollY);
+      if (scrollChanged) {
+        lastDrawnScrollY = smoothScrollY;
       }
 
       const maxScroll = Math.max(1, docH - vh);
       const scrollPercent = clamp(smoothScrollY / maxScroll, 0, 1);
 
       if (bar) {
-        bar.style.transform = `scaleX(${scrollPercent})`;
-      }
-      if (hd) {
-        hd.classList.toggle('sc', targetScroll > 35);
-      }
-
-      if (reduceMotion) return;
-
-      // Damped hover tilt spring for hovered and cooling cards
-      const tiltFollow = 1 - Math.exp(-6.5 * dt);
-      activeTiltingCards.forEach((el) => {
-        const st = getTiltState(el);
-        st.curX += (st.targetX - st.curX) * tiltFollow;
-        st.curY += (st.targetY - st.curY) * tiltFollow;
-
-        el.style.setProperty('--hrx', `${st.curX.toFixed(2)}deg`);
-        el.style.setProperty('--hry', `${st.curY.toFixed(2)}deg`);
-
-        if (el !== activeTilt && Math.abs(st.curX) < 0.03 && Math.abs(st.curY) < 0.03) {
-          st.curX = 0;
-          st.curY = 0;
-          el.style.setProperty('--hrx', '0deg');
-          el.style.setProperty('--hry', '0deg');
-          activeTiltingCards.delete(el);
+        const barScale = scrollPercent.toFixed(4);
+        if (barScale !== lastBarScale) {
+          lastBarScale = barScale;
+          bar.style.transform = `scaleX(${barScale})`;
         }
-      });
+      }
 
-      // Multi-plane 3D Hero Exit & Reverse Entry Scrub
-      if (hc && heroTxt) {
-        const mFollow = 1 - Math.exp(-3.8 * dt);
+      if (!reduceMotion) {
+        // Damped hover tilt spring for hovered and cooling cards
+        const tiltFollow = 1 - Math.exp(-12 * dt);
+        activeTiltingCards.forEach((el) => {
+          const st = getTiltState(el);
+          st.curX += (st.targetX - st.curX) * tiltFollow;
+          st.curY += (st.targetY - st.curY) * tiltFollow;
+
+          const done = Math.abs(st.targetX - st.curX) < 0.02 && Math.abs(st.targetY - st.curY) < 0.02;
+          if (done) {
+            st.curX = st.targetX;
+            st.curY = st.targetY;
+            activeTiltingCards.delete(el);
+          }
+
+          const s3dItem = nodeByEl.get(el);
+          if (s3dItem) {
+            s3dItem.hrx = st.curX;
+            s3dItem.hry = st.curY;
+            s3dItem.tiltDirty = true;
+          } else {
+            el.style.setProperty('--hrx', `${st.curX.toFixed(2)}deg`);
+            el.style.setProperty('--hry', `${st.curY.toFixed(2)}deg`);
+          }
+        });
+
+        // Multi-plane 3D Hero Exit & Reverse Entry Scrub
+        const mFollow = 1 - Math.exp(-8 * dt);
         smx += (mx - smx) * mFollow;
         smy += (my - smy) * mFollow;
-        const hp = clamp(smoothScrollY / vh, 0, 1.35);
+        if (Math.abs(mx - smx) < 0.001) smx = mx;
+        if (Math.abs(my - smy) < 0.001) smy = my;
 
-        heroTxt.style.transform = `perspective(1100px) translate3d(0, ${(hp * 42).toFixed(1)}px, ${(-hp * 185).toFixed(1)}px) rotateX(${(hp * 15).toFixed(2)}deg) scale(${(1 - hp * 0.1).toFixed(3)})`;
-        heroTxt.style.opacity = clamp(1 - hp * 1.15, 0, 1).toFixed(3);
+        if (hc && heroTxt) {
+          const hp = clamp(smoothScrollY / vh, 0, 1.35);
+          const heroT = `perspective(1100px) translate3d(0, ${(hp * 42).toFixed(1)}px, ${(-hp * 185).toFixed(1)}px) rotateX(${(hp * 15).toFixed(2)}deg) scale(${(1 - hp * 0.1).toFixed(3)})`;
+          const heroOp = clamp(1 - hp * 1.15, 0, 1).toFixed(3);
+          if (heroT !== lastHeroTransform) {
+            lastHeroTransform = heroT;
+            heroTxt.style.transform = heroT;
+          }
+          if (heroOp !== lastHeroOpacity) {
+            lastHeroOpacity = heroOp;
+            heroTxt.style.opacity = heroOp;
+          }
 
-        hc.style.transform = `perspective(1050px) translate3d(0, ${(-hp * 85).toFixed(1)}px, ${(hp * 55).toFixed(1)}px) rotateY(${(smx * 8).toFixed(2)}deg) rotateX(${(-smy * 6 + hp * 10).toFixed(2)}deg) scale(${clamp(1 - hp * 0.1, 0.78, 1).toFixed(3)})`;
-        hc.style.opacity = clamp(1 - Math.max(0, hp - 0.25) * 1.35, 0, 1).toFixed(3);
-      }
-
-      // Continuous Bi-Directional 3D Scrubbing across all sections
-      for (let i = 0; i < s3dNodes.length; i++) {
-        const item = s3dNodes[i];
-        const vTop = item.top - smoothScrollY;
-        const bottomEdge = vTop + item.height;
-
-        // Bottom-aware entrance so items near bottom of document settle 100% before maxScroll
-        const maxTravelAboveBottom = Math.max(60, vh - (item.top - maxScroll));
-        const nearBottomScale = clamp(maxTravelAboveBottom / (vh * 0.45), 0.3, 1);
-        const rawStagger =
-          item.mode === 'deck'
-            ? (item.idx % item.deckCols) * 26
-            : (item.idx % 6) * 22;
-        const staggerPx = rawStagger * nearBottomScale;
-        const availAfterStagger = Math.max(40, maxTravelAboveBottom - staggerPx);
-        const enterSpan = Math.min(vh * 0.28, availAfterStagger * 0.8);
-        const distFromBottom = vh - vTop - staggerPx;
-
-        const eIn = smoothstep(clamp(distFromBottom / enterSpan, 0, 1));
-        const inPhase = 1 - eIn;
-
-        const exitSpan = Math.min(vh * 0.32, Math.max(120, item.height * 0.8));
-        const eOut = item.mode === 'curtain'
-          ? 1
-          : smoothstep(clamp(bottomEdge / exitSpan, 0, 1));
-        const outPhase = 1 - eOut;
-
-        // Fast clarity opacity curve so cards become crisp solid inside viewport while still gliding in 3D
-        const opIn = smoothstep(clamp(distFromBottom / Math.max(24, enterSpan * 0.42), 0, 1));
-        const opOut = item.mode === 'curtain'
-          ? 1
-          : smoothstep(clamp(bottomEdge / Math.max(28, exitSpan * 0.45), 0, 1));
-        const sop = clamp(opIn * opOut, 0, 1);
-
-        const p = clamp((vh - vTop) / (vh + item.height), 0, 1);
-
-        let stx = 0, sty = 0, stz = 0, srx = 0, sry = 0, srz = 0, ssc = 1;
-
-        switch (item.mode) {
-          case 'title': {
-            sty = inPhase * 42 - outPhase * 32 + (0.5 - p) * 16;
-            stz = -inPhase * 90 - outPhase * 110;
-            srx = inPhase * 28 - outPhase * 24;
-            ssc = 1 - inPhase * 0.1 - outPhase * 0.1;
-            break;
+          const hcT = `perspective(1050px) translate3d(0, ${(-hp * 85).toFixed(1)}px, ${(hp * 55).toFixed(1)}px) rotateY(${(smx * 8).toFixed(2)}deg) rotateX(${(-smy * 6 + hp * 10).toFixed(2)}deg) scale(${clamp(1 - hp * 0.1, 0.78, 1).toFixed(3)})`;
+          const hcOp = clamp(1 - Math.max(0, hp - 0.25) * 1.35, 0, 1).toFixed(3);
+          if (hcT !== lastHcTransform) {
+            lastHcTransform = hcT;
+            hc.style.transform = hcT;
           }
-          case 'fan': {
-            const fanOff = item.idx - 1.5;
-            stx = fanOff * inPhase * 48 - fanOff * outPhase * 36;
-            sty = inPhase * 52 - outPhase * 40;
-            stz = -inPhase * 115 - outPhase * 110;
-            srx = inPhase * 32 - outPhase * 24;
-            sry = -fanOff * inPhase * 14 + fanOff * outPhase * 10;
-            srz = fanOff * inPhase * 2.5;
-            ssc = 1 - inPhase * 0.12 - outPhase * 0.1;
-            break;
+          if (hcOp !== lastHcOpacity) {
+            lastHcOpacity = hcOp;
+            hc.style.opacity = hcOp;
           }
-          case 'door-left': {
-            stx = -inPhase * 52 - outPhase * 24;
-            sty = inPhase * 34 - outPhase * 30;
-            stz = -inPhase * 100 - outPhase * 95;
-            srx = inPhase * 14 - outPhase * 22;
-            sry = inPhase * 20 + outPhase * 10;
-            srz = -inPhase * 1.4;
-            ssc = 1 - inPhase * 0.08 - outPhase * 0.08;
-            break;
-          }
-          case 'door-right': {
-            stx = inPhase * 52 + outPhase * 24;
-            sty = inPhase * 34 - outPhase * 30;
-            stz = -inPhase * 100 - outPhase * 95;
-            srx = inPhase * 14 - outPhase * 22;
-            sry = -inPhase * 20 - outPhase * 10;
-            srz = inPhase * 1.4;
-            ssc = 1 - inPhase * 0.08 - outPhase * 0.08;
-            break;
-          }
-          case 'rise': {
-            sty = inPhase * 32 - outPhase * 24;
-            stz = -inPhase * 70 - outPhase * 70;
-            srx = inPhase * 24 - outPhase * 20;
-            ssc = 1 - inPhase * 0.08 - outPhase * 0.08;
-            break;
-          }
-          case 'deck': {
-            const cs = item.colSlot || 0;
-            stx = cs * inPhase * 42 - cs * outPhase * 28;
-            sty = inPhase * 58 - outPhase * 42;
-            stz = -inPhase * 130 - outPhase * 115;
-            srx = inPhase * 32 - outPhase * 25;
-            sry = -cs * inPhase * 17 + cs * outPhase * 12;
-            srz = cs * inPhase * 2.2;
-            ssc = 1 - inPhase * 0.12 - outPhase * 0.1;
-            const cvPy = clamp((0.5 - p) * 28, -14, 14);
-            item.el.style.setProperty('--cv-py', `${cvPy.toFixed(1)}px`);
-            break;
-          }
-          case 'wave-row': {
-            const dir = item.idx % 2 === 0 ? 1 : -1;
-            stx = -dir * inPhase * 44 + dir * outPhase * 28;
-            sty = inPhase * 42 - outPhase * 30;
-            stz = -inPhase * 95 - outPhase * 95;
-            srx = inPhase * 24 - outPhase * 22;
-            sry = dir * inPhase * 18 - dir * outPhase * 12;
-            srz = dir * inPhase * 1.4;
-            ssc = 1 - inPhase * 0.09 - outPhase * 0.09;
-            item.el.style.setProperty('--sr-prog', sop.toFixed(3));
-            break;
-          }
-          case 'step': {
-            const dir = item.idx % 2 === 0 ? 1 : -1;
-            stx = -dir * inPhase * 24;
-            sty = inPhase * 52 - outPhase * 38;
-            stz = -inPhase * 110 - outPhase * 100;
-            srx = inPhase * 30 - outPhase * 24;
-            sry = dir * inPhase * 14 - dir * outPhase * 10;
-            ssc = 1 - inPhase * 0.1 - outPhase * 0.09;
-            break;
-          }
-          case 'pill': {
-            stx = inPhase * 48 + outPhase * 24;
-            sty = inPhase * 24 - outPhase * 20;
-            stz = -inPhase * 75 - outPhase * 65;
-            srx = inPhase * 16 - outPhase * 16;
-            sry = -inPhase * 16 - outPhase * 8;
-            ssc = 1 - inPhase * 0.07 - outPhase * 0.07;
-            break;
-          }
-          case 'curtain': {
-            sty = inPhase * 44;
-            stz = -inPhase * 90;
-            srx = inPhase * 22;
-            ssc = 1 - inPhase * 0.06;
-            break;
-          }
-          default:
-            break;
         }
 
-        const elStyle = item.el.style;
-        elStyle.setProperty('--stx', `${stx.toFixed(1)}px`);
-        elStyle.setProperty('--sty', `${sty.toFixed(1)}px`);
-        elStyle.setProperty('--stz', `${stz.toFixed(1)}px`);
-        elStyle.setProperty('--srx', `${srx.toFixed(2)}deg`);
-        elStyle.setProperty('--sry', `${sry.toFixed(2)}deg`);
-        elStyle.setProperty('--srz', `${srz.toFixed(2)}deg`);
-        elStyle.setProperty('--ssc', ssc.toFixed(3));
-        elStyle.setProperty('--sop', sop.toFixed(3));
+        // Continuous Bi-Directional 3D Scrubbing across all sections (with off-screen culling & dirty checking)
+        for (let i = 0; i < s3dNodes.length; i++) {
+          const item = s3dNodes[i];
+          if (!scrollChanged && !item.forceUpdate && !item.tiltDirty) {
+            continue;
+          }
+
+          const vTop = item.top - smoothScrollY;
+          const bottomEdge = vTop + item.height;
+          const isOffscreen = vTop > vh + 140 || bottomEdge < -140;
+
+          if (isOffscreen && item.offscreenSettled && !item.forceUpdate && !item.tiltDirty) {
+            continue;
+          }
+
+          // Bottom-aware entrance so items near bottom of document settle 100% before maxScroll
+          const maxTravelAboveBottom = Math.max(60, vh - (item.top - maxScroll));
+          const nearBottomScale = clamp(maxTravelAboveBottom / (vh * 0.45), 0.3, 1);
+          const rawStagger =
+            item.mode === 'deck'
+              ? (item.idx % item.deckCols) * 26
+              : (item.idx % 6) * 22;
+          const staggerPx = rawStagger * nearBottomScale;
+          const availAfterStagger = Math.max(40, maxTravelAboveBottom - staggerPx);
+          const enterSpan = Math.min(vh * 0.28, availAfterStagger * 0.8);
+          const distFromBottom = vh - vTop - staggerPx;
+
+          const eIn = smoothstep(clamp(distFromBottom / enterSpan, 0, 1));
+          const inPhase = 1 - eIn;
+
+          const exitSpan = Math.min(vh * 0.32, Math.max(120, item.height * 0.8));
+          const eOut = item.mode === 'curtain'
+            ? 1
+            : smoothstep(clamp(bottomEdge / exitSpan, 0, 1));
+          const outPhase = 1 - eOut;
+
+          // Fast clarity opacity curve so cards become crisp solid inside viewport while still gliding in 3D
+          const opIn = smoothstep(clamp(distFromBottom / Math.max(24, enterSpan * 0.42), 0, 1));
+          const opOut = item.mode === 'curtain'
+            ? 1
+            : smoothstep(clamp(bottomEdge / Math.max(28, exitSpan * 0.45), 0, 1));
+          const sop = clamp(opIn * opOut, 0, 1);
+
+          const p = clamp((vh - vTop) / (vh + item.height), 0, 1);
+
+          let stx = 0, sty = 0, stz = 0, srx = 0, sry = 0, srz = 0, ssc = 1;
+
+          switch (item.mode) {
+            case 'title': {
+              sty = inPhase * 42 - outPhase * 32 + (0.5 - p) * 16;
+              stz = -inPhase * 90 - outPhase * 110;
+              srx = inPhase * 28 - outPhase * 24;
+              ssc = 1 - inPhase * 0.1 - outPhase * 0.1;
+              break;
+            }
+            case 'fan': {
+              const fanOff = item.idx - 1.5;
+              stx = fanOff * inPhase * 48 - fanOff * outPhase * 36;
+              sty = inPhase * 52 - outPhase * 40;
+              stz = -inPhase * 115 - outPhase * 110;
+              srx = inPhase * 32 - outPhase * 24;
+              sry = -fanOff * inPhase * 14 + fanOff * outPhase * 10;
+              srz = fanOff * inPhase * 2.5;
+              ssc = 1 - inPhase * 0.12 - outPhase * 0.1;
+              break;
+            }
+            case 'door-left': {
+              stx = -inPhase * 52 - outPhase * 24;
+              sty = inPhase * 34 - outPhase * 30;
+              stz = -inPhase * 100 - outPhase * 95;
+              srx = inPhase * 14 - outPhase * 22;
+              sry = inPhase * 20 + outPhase * 10;
+              srz = -inPhase * 1.4;
+              ssc = 1 - inPhase * 0.08 - outPhase * 0.08;
+              break;
+            }
+            case 'door-right': {
+              stx = inPhase * 52 + outPhase * 24;
+              sty = inPhase * 34 - outPhase * 30;
+              stz = -inPhase * 100 - outPhase * 95;
+              srx = inPhase * 14 - outPhase * 22;
+              sry = -inPhase * 20 - outPhase * 10;
+              srz = inPhase * 1.4;
+              ssc = 1 - inPhase * 0.08 - outPhase * 0.08;
+              break;
+            }
+            case 'rise': {
+              sty = inPhase * 32 - outPhase * 24;
+              stz = -inPhase * 70 - outPhase * 70;
+              srx = inPhase * 24 - outPhase * 20;
+              ssc = 1 - inPhase * 0.08 - outPhase * 0.08;
+              break;
+            }
+            case 'deck': {
+              const cs = item.colSlot || 0;
+              stx = cs * inPhase * 42 - cs * outPhase * 28;
+              sty = inPhase * 58 - outPhase * 42;
+              stz = -inPhase * 130 - outPhase * 115;
+              srx = inPhase * 32 - outPhase * 25;
+              sry = -cs * inPhase * 17 + cs * outPhase * 12;
+              srz = cs * inPhase * 2.2;
+              ssc = 1 - inPhase * 0.12 - outPhase * 0.1;
+              const cvPy = clamp((0.5 - p) * 28, -14, 14).toFixed(1);
+              if (cvPy !== item.lastCvPy) {
+                item.lastCvPy = cvPy;
+                item.el.style.setProperty('--cv-py', `${cvPy}px`);
+              }
+              break;
+            }
+            case 'wave-row': {
+              const dir = item.idx % 2 === 0 ? 1 : -1;
+              stx = -dir * inPhase * 44 + dir * outPhase * 28;
+              sty = inPhase * 42 - outPhase * 30;
+              stz = -inPhase * 95 - outPhase * 95;
+              srx = inPhase * 24 - outPhase * 22;
+              sry = dir * inPhase * 18 - dir * outPhase * 12;
+              srz = dir * inPhase * 1.4;
+              ssc = 1 - inPhase * 0.09 - outPhase * 0.09;
+              const srProg = sop.toFixed(3);
+              if (srProg !== item.lastSrProg) {
+                item.lastSrProg = srProg;
+                item.el.style.setProperty('--sr-prog', srProg);
+              }
+              break;
+            }
+            case 'step': {
+              const dir = item.idx % 2 === 0 ? 1 : -1;
+              stx = -dir * inPhase * 24;
+              sty = inPhase * 52 - outPhase * 38;
+              stz = -inPhase * 110 - outPhase * 100;
+              srx = inPhase * 30 - outPhase * 24;
+              sry = dir * inPhase * 14 - dir * outPhase * 10;
+              ssc = 1 - inPhase * 0.1 - outPhase * 0.09;
+              break;
+            }
+            case 'pill': {
+              stx = inPhase * 48 + outPhase * 24;
+              sty = inPhase * 24 - outPhase * 20;
+              stz = -inPhase * 75 - outPhase * 65;
+              srx = inPhase * 16 - outPhase * 16;
+              sry = -inPhase * 16 - outPhase * 8;
+              ssc = 1 - inPhase * 0.07 - outPhase * 0.07;
+              break;
+            }
+            case 'curtain': {
+              sty = inPhase * 44;
+              stz = -inPhase * 90;
+              srx = inPhase * 22;
+              ssc = 1 - inPhase * 0.06;
+              break;
+            }
+            default:
+              break;
+          }
+
+          const rxTotal = srx + item.hrx;
+          const ryTotal = sry + item.hry;
+          const transformStr = `perspective(1050px) translate3d(${stx.toFixed(1)}px, ${sty.toFixed(1)}px, ${stz.toFixed(1)}px) rotateX(${rxTotal.toFixed(2)}deg) rotateY(${ryTotal.toFixed(2)}deg) rotateZ(${srz.toFixed(2)}deg) scale(${ssc.toFixed(3)})`;
+          const opacityStr = sop.toFixed(3);
+
+          if (transformStr !== item.lastTransform) {
+            item.lastTransform = transformStr;
+            item.el.style.transform = transformStr;
+          }
+          if (opacityStr !== item.lastOpacity) {
+            item.lastOpacity = opacityStr;
+            item.el.style.opacity = opacityStr;
+          }
+
+          item.forceUpdate = false;
+          item.tiltDirty = false;
+          item.offscreenSettled = isOffscreen && sop === 0 && item.hrx === 0 && item.hry === 0;
+        }
+      }
+
+      const cursorSettled = cx === gx && cy === gy && gs === gz;
+      const scrollSettled = smoothScrollY === targetScroll;
+      const heroSettled = reduceMotion || (mx === smx && my === smy);
+
+      if (cursorSettled && scrollSettled && heroSettled && activeTiltingCards.size === 0 && !pointerDirty && !needsMeasure) {
+        animId = null;
+      } else {
+        animId = requestAnimationFrame(loop);
       }
     };
 
-    window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    window.addEventListener('resize', measureNodes);
-    document.fonts?.ready?.then(measureNodes);
-    animId = requestAnimationFrame(loop);
+    const handleDocumentLeave = () => {
+      latestPointerTarget = null;
+      pointerDirty = false;
+      gs = 1;
+      if (activeTilt) {
+        const prevSt = getTiltState(activeTilt);
+        prevSt.targetX = 0;
+        prevSt.targetY = 0;
+        activeTiltingCards.add(activeTilt);
+        activeTilt.classList.remove('glaring');
+        activeTilt = null;
+        tiltRect = null;
+      }
+      if (activeMag) {
+        activeMag.style.setProperty('--mag-x', '0px');
+        activeMag.style.setProperty('--mag-y', '0px');
+        activeMag = null;
+        magRect = null;
+      }
+      wakeLoop();
+    };
 
-    const mutationObserver = new MutationObserver(() => {
-      measureNodes();
-      attachHoverListeners();
-    });
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    document.addEventListener('pointerover', handlePointerOver, { passive: true });
+    document.addEventListener('pointerout', handlePointerOut, { passive: true });
+    document.addEventListener('mouseleave', handleDocumentLeave);
+    window.addEventListener('blur', handleDocumentLeave);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', scheduleMeasure, { passive: true });
+    document.fonts?.ready?.then(scheduleMeasure);
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(scheduleMeasure)
+      : null;
     const mainEl = document.querySelector('main');
-    if (mainEl) {
-      mutationObserver.observe(mainEl, { childList: true, subtree: true });
+    if (resizeObserver && mainEl) {
+      resizeObserver.observe(mainEl);
     }
+
+    wakeLoop();
 
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('resize', measureNodes);
-      cancelAnimationFrame(animId);
-      mutationObserver.disconnect();
+      document.removeEventListener('pointerover', handlePointerOver);
+      document.removeEventListener('pointerout', handlePointerOut);
+      document.removeEventListener('mouseleave', handleDocumentLeave);
+      window.removeEventListener('blur', handleDocumentLeave);
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', scheduleMeasure);
+      if (animId !== null) cancelAnimationFrame(animId);
+      resizeObserver?.disconnect();
     };
   }, []);
 
@@ -663,15 +873,15 @@ export default function App() {
       <Navbar
         theme={theme}
         toggleTheme={toggleTheme}
-        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+        onOpenCommandPalette={handleOpenCommandPalette}
       />
 
       {/* Main Content Sections */}
       <main>
-        <Hero onOpenContact={() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })} />
+        <Hero onOpenContact={handleOpenContact} />
         <ImpactStats />
         <About />
-        <Works onSelectProject={(project) => setActiveProject(project)} />
+        <Works onSelectProject={setActiveProject} />
         <Skills />
         <Journey />
         <Contact onShowToast={showToast} />
@@ -684,18 +894,18 @@ export default function App() {
       {activeProject && (
         <ProjectModal
           project={activeProject}
-          onClose={() => setActiveProject(null)}
+          onClose={handleCloseProject}
         />
       )}
 
       {/* Spotlight Command Palette (Ctrl+K) */}
       <CommandPalette
         isOpen={isCommandPaletteOpen}
-        onClose={() => setIsCommandPaletteOpen(false)}
+        onClose={handleCloseCommandPalette}
         theme={theme}
         toggleTheme={toggleTheme}
-        onOpenChat={() => setIsChatOpen(true)}
-        onSelectProject={(project) => setActiveProject(project)}
+        onOpenChat={handleOpenChat}
+        onSelectProject={setActiveProject}
         onShowToast={showToast}
       />
 

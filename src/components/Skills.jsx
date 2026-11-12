@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 const SKILL_GROUPS = [
   {
@@ -33,7 +33,7 @@ const SKILL_ICONS = {
   GitHub: '/icons/github.svg'
 };
 
-export default function Skills() {
+export default memo(function Skills() {
   return (
     <section id="skills">
       <div className="c">
@@ -59,7 +59,7 @@ export default function Skills() {
                     style={{ '--sk-i': sIdx }}
                   >
                     {SKILL_ICONS[skill] && (
-                      <img src={SKILL_ICONS[skill]} alt="" loading="lazy" />
+                      <img src={SKILL_ICONS[skill]} alt="" loading="lazy" decoding="async" />
                     )}
                     {skill}
                   </span>
@@ -71,4 +71,4 @@ export default function Skills() {
       </div>
     </section>
   );
-}
+});

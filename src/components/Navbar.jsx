@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { Sun, Moon, Command, Menu, X, Download } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { personalInfo } from '../data/portfolioData';
 
-export default function Navbar({ theme, toggleTheme, onOpenCommandPalette }) {
+const SECTION_IDS = ['home', 'work', 'skills', 'journey', 'contact'];
+
+function Navbar({ theme, toggleTheme, onOpenCommandPalette }) {
   const [scrolled, setScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const scrolledRef = useRef(false);
+  const activeRef = useRef('home');
 
   const handleResumeClick = () => {
     try {
@@ -19,33 +23,89 @@ export default function Navbar({ theme, toggleTheme, onOpenCommandPalette }) {
   };
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 35);
+    let sectionMetrics = [];
+    let docHeight = document.documentElement.scrollHeight;
+    let vh = window.innerHeight || 800;
+    let rafId = null;
 
-      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 40) {
-        setActiveSection('contact');
-        return;
-      }
-
-      const sections = ['home', 'work', 'skills', 'journey', 'contact'];
-      const scrollPosition = window.scrollY + window.innerHeight * 0.35;
-
-      for (const section of sections) {
-        const el = document.getElementById(section);
+    const measureSections = () => {
+      vh = window.innerHeight || 800;
+      docHeight = document.documentElement.scrollHeight;
+      sectionMetrics = [];
+      for (let i = 0; i < SECTION_IDS.length; i++) {
+        const id = SECTION_IDS[i];
+        const el = document.getElementById(id);
         if (el) {
-          const top = el.offsetTop;
-          const height = el.offsetHeight;
-          if (scrollPosition >= top && scrollPosition < top + height) {
-            setActiveSection(section);
-            break;
-          }
+          sectionMetrics.push({
+            id,
+            top: el.offsetTop,
+            bottom: el.offsetTop + el.offsetHeight
+          });
         }
       }
     };
 
-    handleScroll();
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    const updateNavState = () => {
+      rafId = null;
+      const sy = window.scrollY;
+      const nextScrolled = sy > 35;
+      if (nextScrolled !== scrolledRef.current) {
+        scrolledRef.current = nextScrolled;
+        setScrolled(nextScrolled);
+      }
+
+      let nextActive = activeRef.current;
+      if (vh + sy >= docHeight - 40) {
+        nextActive = 'contact';
+      } else {
+        const scrollPosition = sy + vh * 0.35;
+        for (let i = 0; i < sectionMetrics.length; i++) {
+          const sec = sectionMetrics[i];
+          if (scrollPosition >= sec.top && scrollPosition < sec.bottom) {
+            nextActive = sec.id;
+            break;
+          }
+        }
+      }
+
+      if (nextActive !== activeRef.current) {
+        activeRef.current = nextActive;
+        setActiveSection(nextActive);
+      }
+    };
+
+    const onScroll = () => {
+      if (rafId === null) {
+        rafId = requestAnimationFrame(updateNavState);
+      }
+    };
+
+    const onResize = () => {
+      measureSections();
+      onScroll();
+    };
+
+    measureSections();
+    updateNavState();
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+    document.fonts?.ready?.then(onResize);
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(onResize)
+      : null;
+    const mainEl = document.querySelector('main');
+    if (resizeObserver && mainEl) {
+      resizeObserver.observe(mainEl);
+    }
+
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
+      resizeObserver?.disconnect();
+    };
   }, []);
 
   const navLinks = [
@@ -199,3 +259,5 @@ export default function Navbar({ theme, toggleTheme, onOpenCommandPalette }) {
     </header>
   );
 }
+
+export default memo(Navbar);

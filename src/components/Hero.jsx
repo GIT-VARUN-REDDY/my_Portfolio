@@ -1,32 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { Download, ArrowRight, ArrowDown } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { personalInfo } from '../data/portfolioData';
 
-export default function Hero({ onOpenContact }) {
+const ROLES = [
+  "AI Engineer",
+  "MERN Stack Developer",
+  "App Developer",
+  "Web Developer"
+];
+
+const BADGE_CHARS = "EXPLORE MORE • LET’S • ".split('');
+
+// Isolated typewriter component so typing ticks do not re-render the Hero tree
+const TypewriterRole = memo(function TypewriterRole() {
   const [roleIndex, setRoleIndex] = useState(0);
   const [displayText, setDisplayText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
-  const [typingSpeed, setTypingSpeed] = useState(135);
 
-  const roles = [
-    "AI Engineer",
-    "MERN Stack Developer",
-    "App Developer",
-    "Web Developer"
-  ];
-
-  // Typewriter effect
   useEffect(() => {
-    const currentRole = roles[roleIndex];
+    const currentRole = ROLES[roleIndex];
+    let delay = isDeleting ? 65 : 135;
     let timer;
 
     if (!isDeleting && displayText === currentRole) {
       timer = setTimeout(() => setIsDeleting(true), 2200);
     } else if (isDeleting && displayText === '') {
       setIsDeleting(false);
-      setRoleIndex((prev) => (prev + 1) % roles.length);
-      setTypingSpeed(135);
+      setRoleIndex((prev) => (prev + 1) % ROLES.length);
     } else {
       timer = setTimeout(() => {
         setDisplayText((prev) =>
@@ -34,13 +35,16 @@ export default function Hero({ onOpenContact }) {
             ? currentRole.substring(0, prev.length - 1)
             : currentRole.substring(0, prev.length + 1)
         );
-        setTypingSpeed(isDeleting ? 65 : 135);
-      }, typingSpeed);
+      }, delay);
     }
 
     return () => clearTimeout(timer);
-  }, [displayText, isDeleting, roleIndex, typingSpeed]);
+  }, [displayText, isDeleting, roleIndex]);
 
+  return <em id="ty">{displayText}</em>;
+});
+
+function Hero({ onOpenContact }) {
   const handleResumeDownload = () => {
     try {
       confetti({
@@ -50,10 +54,6 @@ export default function Hero({ onOpenContact }) {
       });
     } catch (e) {}
   };
-
-  // Circular rotating badge text
-  const badgeText = "EXPLORE MORE • LET’S • ";
-  const chars = badgeText.split('');
 
   return (
     <section className="hero" id="home">
@@ -65,7 +65,7 @@ export default function Hero({ onOpenContact }) {
           
           <h1 className="hero-enter" style={{ animationDelay: '0.16s' }}>
             Full-Stack Developer &amp;<br />
-            <em id="ty">{displayText}</em>
+            <TypewriterRole />
           </h1>
 
           <p className="hd hero-enter" style={{ animationDelay: '0.28s' }}>
@@ -121,14 +121,15 @@ export default function Hero({ onOpenContact }) {
               width="300"
               height="380"
               loading="eager"
+              decoding="async"
             />
           </div>
 
           {/* Rotating Circular Badge */}
           <div className="bd">
             <div className="t">
-              {chars.map((char, i) => {
-                const deg = (360 / chars.length) * i;
+              {BADGE_CHARS.map((char, i) => {
+                const deg = (360 / BADGE_CHARS.length) * i;
                 return (
                   <span
                     key={i}
@@ -159,3 +160,5 @@ export default function Hero({ onOpenContact }) {
     </section>
   );
 }
+
+export default memo(Hero);

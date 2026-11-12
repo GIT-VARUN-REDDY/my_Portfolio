@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import * as THREE from 'three';
 
-export default function ThreeBackground({ theme, themeRipple }) {
+function ThreeBackground({ theme, themeRipple }) {
   const canvasRef = useRef(null);
   const themeWaveTriggerRef = useRef(null);
   const themeStateRef = useRef({
@@ -21,7 +21,7 @@ export default function ThreeBackground({ theme, themeRipple }) {
     try {
       renderer = new THREE.WebGLRenderer({
         canvas,
-        antialias: true,
+        antialias: false,
         alpha: true,
         powerPreference: 'high-performance'
       });
@@ -30,16 +30,19 @@ export default function ThreeBackground({ theme, themeRipple }) {
       return;
     }
 
-    const isMobile = window.innerWidth < 768;
+    let vpWidth = window.innerWidth;
+    let vpHeight = window.innerHeight || 800;
+    const isMobile = vpWidth < 768;
     const FOV = 50;
-    const dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2);
+    const TAN_HALF_FOV = Math.tan((FOV * Math.PI) / 360);
+    let dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.25 : 1.5);
     renderer.setPixelRatio(dpr);
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(vpWidth, vpHeight, false);
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(
       FOV,
-      window.innerWidth / window.innerHeight,
+      vpWidth / vpHeight,
       0.1,
       200
     );
@@ -113,8 +116,8 @@ export default function ThreeBackground({ theme, themeRipple }) {
     // =========================================================================
     // LAYER 2: 3D FLUID PARTICLE WAVE HORIZON (Subtle, Scroll-Reversible)
     // =========================================================================
-    const cols = isMobile ? 48 : 80;
-    const rows = isMobile ? 28 : 42;
+    const cols = isMobile ? 42 : 68;
+    const rows = isMobile ? 24 : 34;
     const totalPts = cols * rows;
     const widthSpan = isMobile ? 38 : 62;
     const depthSpan = isMobile ? 26 : 38;
@@ -210,7 +213,7 @@ export default function ThreeBackground({ theme, themeRipple }) {
 
           float crestNorm = clamp((waveY + mouseLift * 0.6 + burstLift + themeWaveLift * 0.7 + 1.6) / 3.4, 0.0, 1.0);
           float perspectiveScale = 28.0 / max(2.0, -mvPosition.z);
-          gl_PointSize = (1.35 + crestNorm * 2.1 + burstRing * 1.6 + themeCrest1 * 1.9) * perspectiveScale * uPixelRatio;
+          gl_PointSize = (1.55 + crestNorm * 2.35 + burstRing * 1.65 + themeCrest1 * 1.95) * perspectiveScale * uPixelRatio;
 
           vec2 ndc = gl_Position.xy / max(0.001, gl_Position.w);
           vCenterCalm = smoothstep(0.08, 0.85, length(ndc * vec2(0.85, 1.1)));
@@ -265,7 +268,7 @@ export default function ThreeBackground({ theme, themeRipple }) {
     // LAYER 3: ORIGINAL SOFT FADED GLOWING CORNER SPHERES (ORBS)
     // Floating at left/right viewport corners with cursor repulsion & bursts
     // =========================================================================
-    const orbGeo = new THREE.SphereGeometry(1, 40, 28);
+    const orbGeo = new THREE.SphereGeometry(1, 24, 16);
     const numOrbs = isMobile ? 6 : 9;
 
     const orbVs = `
@@ -340,40 +343,56 @@ export default function ThreeBackground({ theme, themeRipple }) {
     let prevScrollY = window.scrollY;
     let scrollVel = 0;
     let burst = null;
+    let cachedMaxScroll = Math.max(1, document.documentElement.scrollHeight - vpHeight);
+
+    const updateDocMetrics = () => {
+      cachedMaxScroll = Math.max(1, document.documentElement.scrollHeight - vpHeight);
+    };
 
     const onPointerMove = (e) => {
-      mouseNdcX = (e.clientX / window.innerWidth) * 2 - 1;
-      mouseNdcY = -(e.clientY / window.innerHeight) * 2 + 1;
+      mouseNdcX = (e.clientX / vpWidth) * 2 - 1;
+      mouseNdcY = -(e.clientY / vpHeight) * 2 + 1;
     };
 
     const onPointerDown = (e) => {
-      const nx = (e.clientX / window.innerWidth) * 2 - 1;
-      const ny = -(e.clientY / window.innerHeight) * 2 + 1;
+      const nx = (e.clientX / vpWidth) * 2 - 1;
+      const ny = -(e.clientY / vpHeight) * 2 + 1;
       burst = { x: nx, y: ny };
       waveUniforms.uBurstPos.value.set(nx * 18, -ny * 12 - 22);
       waveUniforms.uBurstTime.value = 0.0;
     };
 
     const handleResize = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      const newDpr = Math.min(window.devicePixelRatio || 1, width < 768 ? 1.5 : 2);
+      vpWidth = window.innerWidth || 1;
+      vpHeight = window.innerHeight || 800;
+      const newDpr = Math.min(window.devicePixelRatio || 1, vpWidth < 768 ? 1.25 : 1.5);
       renderer.setPixelRatio(newDpr);
-      renderer.setSize(width, height);
+      renderer.setSize(vpWidth, vpHeight, false);
       waveUniforms.uPixelRatio.value = newDpr;
-      camera.aspect = width / height;
+      camera.aspect = vpWidth / vpHeight;
       camera.updateProjectionMatrix();
+      updateDocMetrics();
     };
 
     window.addEventListener('pointermove', onPointerMove, { passive: true });
     window.addEventListener('pointerdown', onPointerDown, { passive: true });
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize, { passive: true });
 
-    let animationFrameId;
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(updateDocMetrics)
+      : null;
+    resizeObserver?.observe(document.documentElement);
+
+    let animationFrameId = null;
     let lastTime = performance.now();
     let simTime = 0;
+    let isTabVisible = !document.hidden;
 
     const animate = (now) => {
+      if (!isTabVisible) {
+        animationFrameId = null;
+        return;
+      }
       animationFrameId = requestAnimationFrame(animate);
       const dt = Math.min(Math.max((now - lastTime) / 1000, 0.004), 0.14);
       lastTime = now;
@@ -393,22 +412,21 @@ export default function ThreeBackground({ theme, themeRipple }) {
       }
 
       const sy = window.scrollY;
-      const vh = window.innerHeight || 800;
+      const vh = vpHeight;
       const scrollDiff = sy - smoothScroll;
-      const scrollLambda = Math.abs(scrollDiff) > vh * 1.1 ? 14 : 7.5;
+      const scrollLambda = Math.abs(scrollDiff) > vh * 1.1 ? 20 : 12.5;
       smoothScroll += scrollDiff * (1 - Math.exp(-scrollLambda * dt));
-      scrollVel += ((sy - prevScrollY) - scrollVel) * (1 - Math.exp(-5.5 * dt));
+      scrollVel += ((sy - prevScrollY) - scrollVel) * (1 - Math.exp(-8.5 * dt));
       prevScrollY = sy;
 
-      const maxScroll = Math.max(1, document.documentElement.scrollHeight - vh);
-      const scrollNorm = smoothScroll / maxScroll;
+      const scrollNorm = smoothScroll / cachedMaxScroll;
 
-      const mFollow = 1 - Math.exp(-3.6 * dt);
+      const mFollow = 1 - Math.exp(-7.5 * dt);
       smoothMx += (mouseNdcX - smoothMx) * mFollow;
       smoothMy += (mouseNdcY - smoothMy) * mFollow;
 
       // Morph theme colors smoothly in slow fluid motion
-      const colFollow = 1 - Math.exp(-2.8 * dt);
+      const colFollow = 1 - Math.exp(-3.8 * dt);
       const target = themeStateRef.current;
       orbColor.lerp(target.primary, colFollow);
       colSecondary.lerp(target.secondary, colFollow);
@@ -436,10 +454,12 @@ export default function ThreeBackground({ theme, themeRipple }) {
       }
 
       // Update Soft Faded Corner Orbs (camera stays at origin so edges lock cleanly)
-      const fy = smoothScroll / window.innerHeight;
-      orbs.forEach((o) => {
-        const hh = Math.tan((FOV * Math.PI) / 360) * -o.z;
-        const hw = hh * camera.aspect;
+      const fy = smoothScroll / vh;
+      const aspect = camera.aspect;
+      for (let i = 0; i < orbs.length; i++) {
+        const o = orbs[i];
+        const hh = TAN_HALF_FOV * -o.z;
+        const hw = hh * aspect;
         const span = 2 * (hh + o.r);
 
         const bx = o.nx * hw + Math.sin(simTime * 0.3 + o.ph) * 0.9 - scrollVel * 0.01 * o.k;
@@ -479,26 +499,39 @@ export default function ThreeBackground({ theme, themeRipple }) {
           o.off.addScaledVector(o.vel, dt);
         }
 
-        o.g += (f - o.g) * (1 - Math.exp(-4.5 * dt));
+        o.g += (f - o.g) * (1 - Math.exp(-6.5 * dt));
         o.pu *= Math.exp(-1.8 * dt);
         o.u.uG.value = Math.min(1, o.g + o.pu * 0.6);
 
         const s = o.r * (1 + o.g * 0.12 + o.pu * 0.18);
         o.m.position.set(bx + o.off.x, by + o.off.y, o.z);
         o.m.scale.set(s, s * (1 + Math.min(Math.abs(scrollVel) * 0.004, 0.25)), s);
-      });
+      }
 
       burst = null;
       renderer.render(scene, camera);
     };
 
-    animationFrameId = requestAnimationFrame(animate);
+    const handleVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+      if (isTabVisible && animationFrameId === null) {
+        lastTime = performance.now();
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    if (isTabVisible) {
+      animationFrameId = requestAnimationFrame(animate);
+    }
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('resize', handleResize);
+      resizeObserver?.disconnect();
 
       auroraGeo.dispose();
       auroraMat.dispose();
@@ -529,3 +562,5 @@ export default function ThreeBackground({ theme, themeRipple }) {
 
   return <canvas ref={canvasRef} id="gl" aria-hidden="true" />;
 }
+
+export default memo(ThreeBackground);

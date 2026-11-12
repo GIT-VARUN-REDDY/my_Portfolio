@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import confetti from 'canvas-confetti';
 import { personalInfo } from '../data/portfolioData';
 
-export default function Contact({ onShowToast }) {
+export default memo(function Contact({ onShowToast }) {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -217,4 +217,4 @@ export default function Contact({ onShowToast }) {
       </div>
     </section>
   );
-}
+});
