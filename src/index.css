@@ -1675,15 +1675,15 @@ footer small {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.82);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--body) 68%, transparent);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
   z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  animation: modalFadeIn 0.35s ease-out;
+  animation: modalFadeIn 0.3s ease-out;
 }
 
 @keyframes modalFadeIn {
@@ -1692,16 +1692,38 @@ footer small {
 }
 
 .modal-content {
-  background: var(--glass-bg-strong);
+  background: var(--glass-card);
+  backdrop-filter: blur(18px) saturate(175%);
+  -webkit-backdrop-filter: blur(18px) saturate(175%);
   border: 1px solid var(--glass-border);
-  border-radius: 1.6rem;
+  border-radius: 1.75rem;
   max-width: 680px;
   width: 100%;
   max-height: 90vh;
-  overflow-y: auto;
+  overflow: hidden;
   position: relative;
-  box-shadow: var(--glass-highlight), 0 25px 60px rgba(0, 0, 0, 0.55);
-  animation: modalScaleUp 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
+  animation: modalScaleUp 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-scroll {
+  max-height: 90vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--first) 35%, transparent) transparent;
+}
+
+.modal-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--first) 35%, transparent);
+  border-radius: 99px;
 }
 
 @keyframes modalScaleUp {
@@ -1711,14 +1733,17 @@ footer small {
 
 .modal-close-btn {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: 24px;
+  right: 24px;
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: #fff;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
+  color: var(--white);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -1728,122 +1753,216 @@ footer small {
 
 .modal-close-btn:hover {
   background: var(--first);
+  border-color: transparent;
   color: var(--on);
-  transform: rotate(90deg);
+  transform: rotate(90deg) scale(1.06);
 }
 
 .modal-image-wrap {
   position: relative;
-  height: 260px;
-  width: 100%;
-  background: #080c14;
+  height: 248px;
+  margin: 0.9rem 0.9rem 0;
+  border-radius: 1.25rem;
+  overflow: hidden;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--first) 35%, #0e1628), #080c14);
+}
+
+.modal-image-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(6, 10, 20, 0.08) 0%, transparent 45%, rgba(6, 10, 20, 0.38) 100%);
 }
 
 .modal-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+}
+
+.modal-window-dots {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.95rem;
+  z-index: 3;
+  display: flex;
+  gap: 5px;
+}
+
+.modal-window-dots s {
+  width: 7.5px;
+  height: 7.5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .modal-badge-overlay {
   position: absolute;
   bottom: 14px;
-  left: 16px;
+  left: 14px;
+  right: 14px;
+  z-index: 3;
   display: flex;
-  gap: 0.6rem;
+  gap: 0.55rem;
   flex-wrap: wrap;
 }
 
 .modal-category-badge {
-  background: var(--first);
+  background: linear-gradient(155deg, color-mix(in srgb, #fff 18%, var(--first)), var(--first) 55%, var(--first-d));
   color: var(--on);
-  font-size: 0.78rem;
-  font-weight: 700;
-  padding: 0.3rem 0.8rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0.34rem 0.88rem;
   border-radius: 99px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 14px color-mix(in srgb, var(--first) 34%, transparent);
 }
 
 .modal-metrics-badge {
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(8px);
-  color: #ffd166;
-  font-size: 0.78rem;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-highlight);
+  color: var(--white);
+  font-size: 0.76rem;
   font-weight: 600;
-  padding: 0.3rem 0.8rem;
+  padding: 0.34rem 0.88rem;
   border-radius: 99px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.38rem;
+}
+
+.modal-metrics-badge svg {
+  color: var(--first);
 }
 
 .modal-body {
-  padding: 2.2rem;
+  padding: 1.5rem 1.8rem 1.9rem;
 }
 
 .modal-title {
-  font-size: 1.65rem;
+  font-size: clamp(1.45rem, 2.5vw, 1.75rem);
   color: var(--white);
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.25rem;
   font-family: var(--h);
+  letter-spacing: -0.01em;
 }
 
 .modal-tagline {
-  font-size: 0.95rem;
-  color: var(--text-muted);
-  margin-bottom: 1.4rem;
+  font-size: 0.94rem;
+  color: var(--text);
+  margin-bottom: 1.2rem;
 }
 
 .modal-actions-bar {
   display: flex;
-  gap: 0.8rem;
-  margin-bottom: 2rem;
+  gap: 0.75rem;
+  margin-bottom: 1.35rem;
   flex-wrap: wrap;
 }
 
 .modal-section {
-  margin-bottom: 1.6rem;
+  margin-bottom: 0.9rem;
+}
+
+.modal-section:last-child {
+  margin-bottom: 0;
+}
+
+.modal-glass-panel {
+  background: color-mix(in srgb, var(--glass-pill) 78%, transparent);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-highlight);
+  border-radius: 1.15rem;
+  padding: 1.05rem 1.2rem;
 }
 
 .modal-section-title {
-  font-size: 0.92rem;
+  font-family: var(--h);
+  font-size: 0.86rem;
   font-weight: 700;
   color: var(--white);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.6rem;
+  gap: 0.48rem;
+  margin-bottom: 0.55rem;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
+}
+
+.modal-section-title svg {
+  color: var(--first);
+  flex-shrink: 0;
 }
 
 .modal-text {
-  font-size: 0.92rem;
-  line-height: 1.7;
+  font-size: 0.9rem;
+  line-height: 1.68;
   color: var(--text);
 }
 
 .modal-highlights-list {
-  padding-left: 1.3rem;
+  list-style: none;
+  padding-left: 0;
   color: var(--text);
-  font-size: 0.9rem;
-  line-height: 1.8;
+  font-size: 0.89rem;
+  line-height: 1.68;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.modal-highlights-list li {
+  position: relative;
+  padding-left: 1.15rem;
+}
+
+.modal-highlights-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.56em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--first);
 }
 
 .modal-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.48rem;
 }
 
 .tech-badge {
   font-size: 0.78rem;
   font-weight: 500;
-  padding: 0.35rem 0.85rem;
+  padding: 0.36rem 0.88rem;
   border-radius: 99px;
   background: var(--glass-pill);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-highlight);
   color: var(--white);
+}
+
+@media (max-width: 600px) {
+  .modal-backdrop {
+    padding: 0.85rem;
+  }
+  .modal-image-wrap {
+    height: 195px;
+    margin: 0.7rem 0.7rem 0;
+  }
+  .modal-close-btn {
+    top: 18px;
+    right: 18px;
+  }
+  .modal-body {
+    padding: 1.2rem 1.15rem 1.4rem;
+  }
 }
 
 /* =========================================================================
@@ -1852,9 +1971,9 @@ footer small {
 .command-palette-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.78);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--body) 68%, transparent);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
   z-index: 150;
   display: flex;
   justify-content: center;
@@ -1868,12 +1987,14 @@ footer small {
 }
 
 .command-palette-modal {
-  background: var(--glass-bg-strong);
+  background: var(--glass-card);
+  backdrop-filter: blur(18px) saturate(175%);
+  -webkit-backdrop-filter: blur(18px) saturate(175%);
   border: 1px solid var(--glass-border);
-  border-radius: 1.4rem;
+  border-radius: 1.45rem;
   width: min(580px, 94%);
   max-height: 80vh;
-  box-shadow: var(--glass-highlight), 0 25px 60px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
   overflow: hidden;
   animation: paletteDrop 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
