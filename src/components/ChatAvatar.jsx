@@ -66,7 +66,7 @@ const OFF_TOPIC_RE = /\b(weather|forecast|temperature|news|recipe|cook|joke|poem
 const POLITE_REJECTION =
   "Sorry, I can only answer questions about Varun Reddy's resume, experience, projects, skills, education, and how to contact him. Feel free to ask about any of those!";
 
-function findResumeFallback(query, history) {
+function getResumeReply(query, history) {
   const q = query.trim().toLowerCase();
   if (!q) return POLITE_REJECTION;
 
@@ -133,9 +133,8 @@ export default function ChatAvatar({ isOpen, setIsOpen }) {
   const [messages, setMessages] = useState([INITIAL_MESSAGE]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [providerLabel, setProviderLabel] = useState('Resume & Portfolio AI');
   const messagesEndRef = useRef(null);
-  const abortRef = useRef(null);
+  const replyTimerRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -145,11 +144,11 @@ export default function ChatAvatar({ isOpen, setIsOpen }) {
 
   useEffect(() => {
     return () => {
-      abortRef.current?.abort();
+      if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
     };
   }, []);
 
-  const handleSend = async (textToSend) => {
+  const handleSend = (textToSend) => {
     const query = (textToSend ?? inputText).trim();
     if (!query || isTyping) return;
 
@@ -164,43 +163,20 @@ export default function ChatAvatar({ isOpen, setIsOpen }) {
     if (!textToSend) setInputText('');
     setIsTyping(true);
 
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    let replyText = '';
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: query, history: historySnapshot }),
-        signal: controller.signal
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.reply) {
-          replyText = data.reply;
-          setProviderLabel(data.provider === 'xai' ? 'Powered by Grok AI' : 'Powered by Groq AI');
+    if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
+    replyTimerRef.current = setTimeout(() => {
+      replyTimerRef.current = null;
+      const replyText = getResumeReply(query, historySnapshot);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          sender: 'bot',
+          text: replyText
         }
-      }
-    } catch (err) {
-      if (err?.name === 'AbortError') return;
-    }
-
-    if (!replyText) {
-      replyText = findResumeFallback(query, historySnapshot);
-      setProviderLabel('Resume Assistant');
-    }
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now() + 1,
-        sender: 'bot',
-        text: replyText
-      }
-    ]);
-    setIsTyping(false);
+      ]);
+      setIsTyping(false);
+    }, 300);
   };
 
   return (
@@ -232,7 +208,7 @@ export default function ChatAvatar({ isOpen, setIsOpen }) {
               </div>
               <div>
                 <h4 className="chat-header-name">Varun's AI Assistant</h4>
-                <span className="chat-header-status">{providerLabel}</span>
+                <span className="chat-header-status">Resume &amp; Portfolio Assistant</span>
               </div>
             </div>
 
