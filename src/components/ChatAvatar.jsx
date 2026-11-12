@@ -1,51 +1,55 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, X, Send, Bot, Sparkles, User, Download, ExternalLink } from 'lucide-react';
-import { aiAvatarKnowledge, personalInfo } from '../data/portfolioData';
+import { X, Send, Bot, User } from 'lucide-react';
+import { aiAvatarKnowledge } from '../data/portfolioData';
 
-export default function ChatAvatar({ isOpen, setIsOpen, onShowToast }) {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      sender: 'bot',
-      text: "Hey there! I'm Varun's AI Assistant. Ask me anything about Varun's skills, experience, projects, or how to get in touch!"
+const SUGGESTED_QUESTIONS = [
+  "What's your tech stack?",
+  "Can I get your resume?",
+  "Tell me about your AI work",
+  "Are you available for hire?"
+];
+
+const INITIAL_MESSAGE = {
+  id: 1,
+  sender: 'bot',
+  text: "Hey there! I'm Varun's AI Assistant. Ask me anything about Varun's skills, experience, projects, or how to get in touch!"
+};
+
+const findBestResponse = (query) => {
+  const q = query.toLowerCase();
+
+  for (const item of aiAvatarKnowledge) {
+    if (item.keywords.some((kw) => q.includes(kw))) {
+      return item.answer;
     }
-  ]);
+  }
+
+  return "I'm Varun's AI avatar! Varun is a Full-Stack & AI Engineer specializing in React, Node.js, Python, and API integration. Feel free to download his resume or email him directly at varunreddy0429@gmail.com!";
+};
+
+export default function ChatAvatar({ isOpen, setIsOpen }) {
+  const [messages, setMessages] = useState([INITIAL_MESSAGE]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [providerLabel, setProviderLabel] = useState('Powered by Grok AI');
   const messagesEndRef = useRef(null);
-
-  const suggestedQuestions = [
-    "What's your tech stack?",
-    "Can I get your resume?",
-    "Tell me about your AI work",
-    "Are you available for hire?"
-  ];
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const abortRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
-      scrollToBottom();
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, isTyping]);
 
-  const findBestResponse = (query) => {
-    const q = query.toLowerCase();
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
-    for (const item of aiAvatarKnowledge) {
-      if (item.keywords.some((kw) => q.includes(kw))) {
-        return item.answer;
-      }
-    }
-
-    return "I'm Varun's AI avatar! Varun is a Full-Stack & AI Engineer specializing in React, Node.js, Python, and PyTorch. Feel free to download his resume or email him directly at varunreddy0429@gmail.com!";
-  };
-
-  const handleSend = (textToSend) => {
-    const query = textToSend || inputText;
-    if (!query.trim()) return;
+  const handleSend = async (textToSend) => {
+    const query = (textToSend ?? inputText).trim();
+    if (!query || isTyping) return;
 
     const userMsg = {
       id: Date.now(),
@@ -53,21 +57,48 @@ export default function ChatAvatar({ isOpen, setIsOpen, onShowToast }) {
       text: query
     };
 
+    const historySnapshot = messages.slice(-8);
     setMessages((prev) => [...prev, userMsg]);
-    setInputText('');
+    if (!textToSend) setInputText('');
     setIsTyping(true);
 
-    // Simulate smart thinking delay
-    setTimeout(() => {
-      const responseText = findBestResponse(query);
-      const botMsg = {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    let replyText = '';
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: query, history: historySnapshot }),
+        signal: controller.signal
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.reply) {
+          replyText = data.reply;
+          setProviderLabel(data.provider === 'xai' ? 'Powered by Grok AI' : 'Powered by Groq AI');
+        }
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+
+    if (!replyText) {
+      replyText = findBestResponse(query);
+      setProviderLabel('Instant Knowledge Base');
+    }
+
+    setMessages((prev) => [
+      ...prev,
+      {
         id: Date.now() + 1,
         sender: 'bot',
-        text: responseText
-      };
-      setMessages((prev) => [...prev, botMsg]);
-      setIsTyping(false);
-    }, 600);
+        text: replyText
+      }
+    ]);
+    setIsTyping(false);
   };
 
   return (
@@ -99,7 +130,7 @@ export default function ChatAvatar({ isOpen, setIsOpen, onShowToast }) {
               </div>
               <div>
                 <h4 className="chat-header-name">Varun's AI Assistant</h4>
-                <span className="chat-header-status">Powered by Knowledge Base</span>
+                <span className="chat-header-status">{providerLabel}</span>
               </div>
             </div>
 
@@ -115,7 +146,7 @@ export default function ChatAvatar({ isOpen, setIsOpen, onShowToast }) {
 
           {/* Quick Suggestions Bar */}
           <div className="chat-suggestions-bar">
-            {suggestedQuestions.map((q) => (
+            {SUGGESTED_QUESTIONS.map((q) => (
               <button
                 key={q}
                 type="button"
@@ -186,7 +217,7 @@ export default function ChatAvatar({ isOpen, setIsOpen, onShowToast }) {
               type="submit"
               className="chat-send-btn"
               aria-label="Send message"
-              disabled={!inputText.trim()}
+              disabled={!inputText.trim() || isTyping}
             >
               <Send size={15} />
             </button>
@@ -196,4 +227,3 @@ export default function ChatAvatar({ isOpen, setIsOpen, onShowToast }) {
     </div>
   );
 }
-
